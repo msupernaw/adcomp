@@ -236,6 +236,7 @@ private:
 	);
 // ------------------------------------------------------------
 public:
+	#include "kasper.hpp"
 	/// copy constructor
 	ADFun(const ADFun& g) 
 	: num_var_tape_(0)

@@ -18,6 +18,12 @@ namespace CppAD { // BEGIN_CPPAD_NAMESPACE
 \file player.hpp
 File used to define the player class.
 */
+struct tape_point{
+  OpCode op;
+  const addr_t* op_arg;
+  size_t op_index;
+  size_t var_index;
+};
 
 
 /*!
