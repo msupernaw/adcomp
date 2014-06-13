@@ -500,7 +500,7 @@ bool is_tape_point_constant(size_t index){
 
 pod_vector<Base> Partial;
 void my_init(vector<bool> keepcol){
-  Partial.extend(total_num_var_ * 1);
+  Partial.extend(num_var_tape_ * 1);
   arg_mark_.resize(play_.rec_op_arg_.size());
   for(size_t i=0;i<arg_mark_.size();i++)arg_mark_[i]=false;
   /* Run a reverse test-sweep to store pointers once */
