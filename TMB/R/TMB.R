@@ -104,7 +104,7 @@ MakeADFun <- function(data,parameters,map=list(),
                       random.start=expression(last.par.best[random]),
                       hessian=FALSE,method="BFGS",
                       inner.method="newton",
-                      inner.control=list(maxit=1000),
+                      inner.control=list(maxit=1000,super=FALSE),
                       MCcontrol=list(doMC=FALSE,seed=123,n=100),
                       ADreport=FALSE,
                       atomic=TRUE,
@@ -463,13 +463,14 @@ MakeADFun <- function(data,parameters,map=list(),
     } else {
       hessian <- spHess(par,random=TRUE)
     }
-    if(inherits(env$L.created.by.newton,"dCHMsuper")){
-      L <- env$L.created.by.newton
-      ##.Call("destructive_CHM_update",L,hessian,as.double(0),PACKAGE="Matrix")
-      updateCholesky(L,hessian)
-    } else
-    L <- Cholesky(hessian,perm=TRUE,LDL=FALSE,super=TRUE)
-
+    L <- env$L.created.by.newton
+    updateCholesky(L,hessian)
+    ## if(inherits(env$L.created.by.newton,"dCHMsuper")){
+    ##   L <- env$L.created.by.newton
+    ##   ##.Call("destructive_CHM_update",L,hessian,as.double(0),PACKAGE="Matrix")
+    ##   updateCholesky(L,hessian)
+    ## } else
+    ## L <- Cholesky(hessian,perm=TRUE,LDL=FALSE,super=TRUE)
     
     if(order==0){
       res <- h(par,order=0,hessian=hessian,L=L)
@@ -967,7 +968,7 @@ newton <- function (par,fn,gr,he,
     ## Make sure Cholesky is succesful
     h.pattern@x[] <- 0
     diag(h.pattern) <- 1
-    env$L.created.by.newton <- Cholesky(h.pattern,super=super)
+    env$L.created.by.newton <- Cholesky(h.pattern,super=super,LDL=FALSE)
   }
   L <- env$L.created.by.newton
   chol.solve <- function(h,g){
