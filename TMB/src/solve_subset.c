@@ -127,11 +127,7 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
     memcpy(wrk,Lss,nq*ns*sizeof(double));    
     F77_CALL(dsymm)("Left","Lower",&np,&ns,&ONE,Spp,&nq,Lps,&nq,&ZERO,wrkps,&nq);
     memcpy(Lss,wrk,nq*ns*sizeof(double));
-    if(ns==1){
-      Lss[0]=1.0/(Lss[0]*Lss[0]);
-    } else {
-      F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
-    }
+    F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
     F77_CALL(dgemm)("N","N",&ns,&ns,&np,&ONE,Ssp,&nq,Lps,&nq,&ONE,Lss,&nq);
   } else {
     F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
@@ -163,9 +159,72 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
 
 }
 
+
+/* #################### SIMPLICIAL VERSION ####################
+   Modification of previous version assuming "L" is simplicial
+   and all supernodes are trivial (ns=1). In this special case
+   the DPOTRI calls can be replaced by scalar operations.
+   Conversion from simplicial storage to super-nodal storage:
+   * x=L@x,
+   * super=as.integer(0:ncol(L)),
+   * pi=L@p,
+   * px=L@p,
+   * s=L@i,
+   * colcount=L@colcount,
+   * perm=L@perm,
+   * type=c(2L, 1L, 1L, 1L, 1L, 1L),
+   * Dim=L@Dim
+*/
+void tmb_recursion_simplicial(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
+  int* Ls=L->i;
+  int* Lpi=L->p;
+  int ncol=1; /* ncol of supernode */
+  int nrow=Lpi[k+1]-Lpi[k]; /* Number of rows in supernode */
+  /* q contains row-indices of *entire* supernode */
+  /* p contains row-indices excluding those of diagonal */
+  /* s contains row-indices of diagonal - setdiff(q,p) */
+  int* q=Ls+Lpi[k];    /* Pointer to L->s [L->pi [k]] */
+  int nq=nrow;         /* length of q */
+  // int* p=q+ncol;       /* Exclude triangle in diagonal */
+  int np=nq-ncol;      /* length of p */
+  int* s=q;
+  int ns=ncol;         /* length of s */
+  /* do not sort because p is sorted */
+  int info; /* For lapack */
+  int i,j;
+  double ONE=1.0, ZERO=0.0, MONE=-1.0;
+  double* xx = densesubmatrix(Lsparse,q,nq,q,nq,c);
+  double *Lss=xx, *Lps=xx+ns, *Ssp=xx+(nq*ns), *Spp=xx+(nq*ns+ns);
+  /* Workspace to hold output from dsymm */
+  double *wrk=preallocated_block2;
+  double *wrkps=wrk+ns;
+  if(np>0){
+    F77_CALL(dtrsm)("Right","Lower","No transpose","Not unit",
+		    &np,&ns,&MONE,Lss,&nq,Lps,&nq);
+    for(i=ns;i<nq;i++){for(j=0;j<ns;j++)Lss[j+nq*i] = Lss[i+nq*j];} /* Copy Transpose*/
+    memcpy(wrk,Lss,nq*ns*sizeof(double));
+    F77_CALL(dsymm)("Left","Lower",&np,&ns,&ONE,Spp,&nq,Lps,&nq,&ZERO,wrkps,&nq);
+    memcpy(Lss,wrk,nq*ns*sizeof(double));
+    Lss[0]=1.0/(Lss[0]*Lss[0]);
+    F77_CALL(dgemm)("N","N",&ns,&ns,&np,&ONE,Ssp,&nq,Lps,&nq,&ONE,Lss,&nq);
+  } else {
+    Lss[0]=1.0/(Lss[0]*Lss[0]);
+  }
+  /* ----------- Fill results into L(q,s) -------*/
+  double *Lx=Lsparse->x;
+  int *Lp=Lsparse->p;
+  int m=Lp[s[0]];
+  for(j=0;j<ns;j++){
+    for(i=j;i<nq;i++){
+      Lx[m]=Lss[i+j*nq];
+      m++;
+    }
+  }
+}
+
 int max_colcount(CHM_FR L){
-  int nsuper=L->nsuper;
-  int* Lpi=L->pi;
+  int nsuper=(L->is_super ? L->nsuper : L->n);
+  int* Lpi=(L->is_super ? L->pi : L->p);
   int nrow;
   int max=0;
   for(int k=0;k<nsuper;k++){
@@ -189,8 +248,12 @@ CHM_SP tmb_inv_super(CHM_FR Lfac, cholmod_common *c){
   preallocated_block2 = malloc((nq*nq)*sizeof(double));
 
   /* Loop over supernodes */
-  int nsuper=Lfac->nsuper;
-  for(int k=nsuper-1;k>=0;k--)tmb_recursion_super(L,k,Lfac,c);
+  int nsuper=(Lfac->is_super ? Lfac->nsuper : Lfac->n);
+  if(Lfac->is_super){
+    for(int k=nsuper-1;k>=0;k--)tmb_recursion_super(L,k,Lfac,c);
+  } else {
+    for(int k=nsuper-1;k>=0;k--)tmb_recursion_simplicial(L,k,Lfac,c);
+  }
 
   /* Cleanup workspace */
   free(preallocated_column);
