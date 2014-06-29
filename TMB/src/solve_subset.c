@@ -68,13 +68,12 @@
 
 					    
 /* Extract dense block x[p,q] of sparse matrix x */
-CHM_DN densesubmatrix(CHM_SP x, int *p, int np, int *q, int nq, cholmod_common *c){
-  CHM_DN ans = M_cholmod_allocate_dense(np,nq,np,CHOLMOD_REAL,c);
+double* densesubmatrix(CHM_SP x, int *p, int np, int *q, int nq, cholmod_common *c){
+  double *ans = malloc((np*nq)*sizeof(double));
   double *w = malloc(x->nrow*sizeof(double));
   int *xi=x->i;
   int *xp=x->p;
   double *xx=x->x;
-  double *ansx=ans->x;
   int col, row;
   for(int j=0;j<nq;j++){
     col=q[j];
@@ -85,7 +84,7 @@ CHM_DN densesubmatrix(CHM_SP x, int *p, int np, int *q, int nq, cholmod_common *
     /* Copy w[p] to ans[:,col] */
     for(int i=j;i<np;i++){
       row=p[i];
-      ansx[i+j*np]=w[row];
+      ans[i+j*np]=w[row];
     }
   }
   free(w);
@@ -112,8 +111,7 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
   int info; /* For lapack */
   int i,j;
   double ONE=1.0, ZERO=0.0, MONE=-1.0;
-  CHM_DN x = densesubmatrix(Lsparse,q,nq,q,nq,c);
-  double *xx=x->x;
+  double* xx = densesubmatrix(Lsparse,q,nq,q,nq,c);
   double *Lss=xx, *Lps=xx+ns, *Ssp=xx+(nq*ns), *Spp=xx+(nq*ns+ns);
   /* Workspace to hold output from dsymm */
   double *wrk=malloc(nq*ns*sizeof(double));
@@ -160,7 +158,7 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
   /* } */
 
   /* Clean up */
-  M_cholmod_free_dense(&x,c);
+  free(xx);
   free(wrk);
 }
 
