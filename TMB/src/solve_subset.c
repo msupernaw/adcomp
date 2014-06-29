@@ -266,7 +266,7 @@ SEXP match_pattern(SEXP A_, SEXP B_){
   return ans;
 }
 
-SEXP tmb_update(SEXP L, SEXP A){
-  M_chm_factor_update(AS_CHM_FR(L),AS_CHM_SP(A),0.0);
+SEXP tmb_update_cholesky(SEXP L, SEXP A, SEXP t){
+  M_chm_factor_update(AS_CHM_FR(L),AS_CHM_SP(A),REAL(t)[0]);
   return L;
 }

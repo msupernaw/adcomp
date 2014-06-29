@@ -9,7 +9,7 @@ getUserDLL <- function()names(tail(getLoadedDLLs(),1)) ## Assume users code is t
 ## Update cholesky factorization ( of H+t*I ) avoiding copy overhead
 ## by writing directly to L(!).
 updateCholesky <- function(L,H,t=0){
-  .Call("destructive_CHM_update",L,H,as.double(t),PACKAGE="Matrix")
+  .Call("tmb_update_cholesky",L,H,as.double(t),PACKAGE="TMB")
 }
 
 ##' Construct objective functions with derivatives based on the users c++ template.
