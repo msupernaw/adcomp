@@ -66,11 +66,16 @@
 //        *      L->x [L->px [k] ... L->px [k+1]-1], and the L->px array is defined
 //        *      in this factor type.
 
+
+/* Pre-allocated workspace for the following routines */
+double* preallocated_column; // size n
+double* preallocated_block1; // size nq*nq
+double* preallocated_block2; // size nq*nq
 					    
 /* Extract dense block x[p,q] of sparse matrix x */
 double* densesubmatrix(CHM_SP x, int *p, int np, int *q, int nq, cholmod_common *c){
-  double *ans = malloc((np*nq)*sizeof(double));
-  double *w = malloc(x->nrow*sizeof(double));
+  double *ans = preallocated_block1;
+  double *w = preallocated_column;
   int *xi=x->i;
   int *xp=x->p;
   double *xx=x->x;
@@ -87,7 +92,6 @@ double* densesubmatrix(CHM_SP x, int *p, int np, int *q, int nq, cholmod_common 
       ans[i+j*np]=w[row];
     }
   }
-  free(w);
   return ans;
 }
 
@@ -114,7 +118,7 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
   double* xx = densesubmatrix(Lsparse,q,nq,q,nq,c);
   double *Lss=xx, *Lps=xx+ns, *Ssp=xx+(nq*ns), *Spp=xx+(nq*ns+ns);
   /* Workspace to hold output from dsymm */
-  double *wrk=malloc(nq*ns*sizeof(double));
+  double *wrk=preallocated_block2;
   double *wrkps=wrk+ns;
   if(np>0){
     F77_CALL(dtrsm)("Right","Lower","No transpose","Not unit",
@@ -157,9 +161,18 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
   /*   } */
   /* } */
 
-  /* Clean up */
-  free(xx);
-  free(wrk);
+}
+
+int max_colcount(CHM_FR L){
+  int nsuper=L->nsuper;
+  int* Lpi=L->pi;
+  int nrow;
+  int max=0;
+  for(int k=0;k<nsuper;k++){
+    nrow=Lpi[k+1]-Lpi[k]; /* Number of rows in supernode */
+    max = (nrow>max ? nrow : max);
+  }
+  return max;
 }
 
 CHM_SP tmb_inv_super(CHM_FR Lfac, cholmod_common *c){
@@ -169,9 +182,20 @@ CHM_SP tmb_inv_super(CHM_FR Lfac, cholmod_common *c){
   CHM_SP L = M_cholmod_factor_to_sparse(Ltmp,c);
   M_cholmod_free_factor(&Ltmp,c);
 
+  /* Pre-allocate workspace */
+  int nq=max_colcount(Lfac);
+  preallocated_column = malloc(L->nrow*sizeof(double));
+  preallocated_block1 = malloc((nq*nq)*sizeof(double));
+  preallocated_block2 = malloc((nq*nq)*sizeof(double));
+
   /* Loop over supernodes */
   int nsuper=Lfac->nsuper;
   for(int k=nsuper-1;k>=0;k--)tmb_recursion_super(L,k,Lfac,c);
+
+  /* Cleanup workspace */
+  free(preallocated_column);
+  free(preallocated_block1);
+  free(preallocated_block2);
 
   /* Change to symm lower */
   L->stype=-1; 
