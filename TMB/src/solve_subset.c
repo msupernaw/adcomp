@@ -125,7 +125,11 @@ void tmb_recursion_super(CHM_SP Lsparse, int k, CHM_FR L, cholmod_common *c){
     memcpy(wrk,Lss,nq*ns*sizeof(double));    
     F77_CALL(dsymm)("Left","Lower",&np,&ns,&ONE,Spp,&nq,Lps,&nq,&ZERO,wrkps,&nq);
     memcpy(Lss,wrk,nq*ns*sizeof(double));
-    F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
+    if(ns==1){
+      Lss[0]=1.0/(Lss[0]*Lss[0]);
+    } else {
+      F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
+    }
     F77_CALL(dgemm)("N","N",&ns,&ns,&np,&ONE,Ssp,&nq,Lps,&nq,&ONE,Lss,&nq);
   } else {
     F77_CALL(dpotri)("L",&ns,Lss,&nq,&info);
