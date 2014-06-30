@@ -235,6 +235,8 @@ int max_colcount(CHM_FR L){
 }
 
 CHM_SP tmb_inv_super(CHM_FR Lfac, cholmod_common *c){
+  /* Not for LDL factorizations */
+  if(!Lfac->is_ll)error("Inverse subset algorithm not implemented for LDL factorization.");
 
   /* Convert factor to sparse without modifying factor */
   CHM_FR Ltmp = M_cholmod_copy_factor(Lfac,c);
