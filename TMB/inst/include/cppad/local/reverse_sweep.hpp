@@ -745,7 +745,7 @@ void myReverseSweep(
   //std::cout << "myReverseSweep" << dep_var_taddr << "\n";
   
   
-  //vector<size_t> relevant(Rec->num_rec_var());
+  //vector<size_t> relevant(Rec->num_var_rec());
   
   /* use dep_var_taddr as mark to avoid resetting workspace */
   //pf->op_mark_[pf->var2op_[dep_var_taddr]]=dep_var_taddr;
@@ -760,11 +760,11 @@ void myReverseSweep(
 	const addr_t*   arg = 0;
 
 	// check numvar argument
-	CPPAD_ASSERT_UNKNOWN( Rec->num_rec_var() == numvar );
+	CPPAD_ASSERT_UNKNOWN( Rec->num_var_rec() == numvar );
 	CPPAD_ASSERT_UNKNOWN( numvar > 0 );
 
 	// length of the parameter vector (used by CppAD assert macros)
-	const size_t num_par = Rec->num_rec_par();
+	const size_t num_par = Rec->num_par_rec();
 
 	// pointer to the beginning of the parameter vector
 	const Base* parameter = 0;
