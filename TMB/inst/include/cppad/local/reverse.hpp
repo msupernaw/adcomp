@@ -229,12 +229,12 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 
 	if(false){
 	  pod_vector<Base> Partial;
-	  Partial.extend(total_num_var_ * p);
+	  Partial.extend(num_var_tape_ * p);
 	  }
 
 	// update maximum memory requirement
 	// memoryMax = std::max( memoryMax, 
-	// 	Memory() + total_num_var_ * p * sizeof(Base)
+	// 	Memory() + num_var_tape_ * p * sizeof(Base)
 	// );
 
 	// check VectorBase is Simple Vector class with Base type elements
@@ -257,14 +257,14 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 
 	/*
 	// initialize entire Partial matrix to zero
-	for(i = 0; i < total_num_var_; i++)
+	for(i = 0; i < num_var_tape_; i++)
 		for(j = 0; j < p; j++)
 			Partial[i * p + j] = zero;
 
 	// set the dependent variable direction
 	// (use += because two dependent variables can point to same location)
 	for(i = 0; i < m; i++)
-	{	CPPAD_ASSERT_UNKNOWN( dep_taddr_[i] < total_num_var_ );
+	{	CPPAD_ASSERT_UNKNOWN( dep_taddr_[i] < num_var_tape_ );
 		if( w.size() == m )
 			Partial[dep_taddr_[i] * p + p - 1] += w[i];
 		else
@@ -282,7 +282,7 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 	myReverseSweep(
 		p - 1,
 		n,
-		total_num_var_,
+		num_var_tape_,
 		&play_,
 		taylor_col_dim_,
 		taylor_.data(),
@@ -333,7 +333,7 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 
 #ifdef DEBUG_KASPER
     int countnnz=0;
-    for(i = 0; i < total_num_var_; i++)
+    for(i = 0; i < num_var_tape_; i++)
       for(j = 0; j < p; j++)
 	countnnz+=(Partial[i * p + j] != zero);
     if(countnnz>0){
@@ -344,7 +344,7 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 	// EXPERIMENT
 	/*
 	for(j = 0; j < n; j++)
-	{	CPPAD_ASSERT_UNKNOWN( ind_taddr_[j] < total_num_var_ );
+	{	CPPAD_ASSERT_UNKNOWN( ind_taddr_[j] < num_var_tape_ );
 
 		// independent variable taddr equals its operator taddr 
 		CPPAD_ASSERT_UNKNOWN( play_.GetOp( ind_taddr_[j] ) == InvOp );
