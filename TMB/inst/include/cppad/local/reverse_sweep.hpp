@@ -720,7 +720,8 @@ void myReverseSweep(
 	// vector<size_t>&       op_mark,         // <-- operator dependency workspace
 	// vector<size_t>&       var2op,
 	// vector<tape_point>&   tp,
-	ADFun<Base>*          pf
+	ADFun<Base>*          pf,
+	const pod_vector<addr_t>&   var_by_load_op
 )
 {
 
@@ -979,14 +980,14 @@ void myReverseSweep(
 			// --------------------------------------------------
 			case LdpOp:
 			reverse_load_op(
-				op, d, i_var, arg, J, Taylor, K, Partial
+				op, d, i_var, arg, J, Taylor, K, Partial, var_by_load_op.data()
 			);
 			break;
 			// -------------------------------------------------
 
 			case LdvOp:
 			reverse_load_op(
-				op, d, i_var, arg, J, Taylor, K, Partial
+				op, d, i_var, arg, J, Taylor, K, Partial, var_by_load_op.data()
 			);
 			break;
 			// -------------------------------------------------

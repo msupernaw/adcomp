@@ -293,7 +293,8 @@ void ADFun<Base>::myReverse(size_t p, const VectorBase &w, size_t dep_var_index,
 		// op_mark_,
 		// var2op_,
 		// tp_,
-		this
+		this,
+		load_op_
 	);
 
 
