@@ -786,6 +786,12 @@ void myReverseSweep(
 	size_t user_j     = 0;       // index in argument vector
 	size_t user_m     = 0;       // size of result vector
 	size_t user_n     = 0;       // size of arugment vector
+	//
+	atomic_base<Base>* user_atom = CPPAD_NULL; // user's atomic op calculator
+# ifndef NDEBUG
+	bool               user_ok   = false;      // atomic op return value
+# endif
+	//
 	// next expected operator in a UserOp sequence
 	enum { user_start, user_arg, user_ret, user_end } user_state = user_end;
 
@@ -1145,13 +1151,22 @@ void myReverseSweep(
 				user_id    = arg[1];
 				user_n     = arg[2];
 				user_m     = arg[3];
-				if(user_ix.size() < user_n)
+				user_atom  = atomic_base<Base>::class_object(user_index);
+# ifndef NDEBUG
+				if( user_atom == CPPAD_NULL )
+				{	std::string msg = 
+						atomic_base<Base>::class_name(user_index)
+						+ ": atomic_base function has been deleted";
+					CPPAD_ASSERT_KNOWN(false, msg.c_str() );
+				}
+# endif
+				if(user_ix.size() != user_n)
 					user_ix.resize(user_n);
-				if(user_tx.size() < user_n * user_k1)
+				if(user_tx.size() != user_n * user_k1)
 				{	user_tx.resize(user_n * user_k1);
 					user_px.resize(user_n * user_k1);
 				}
-				if(user_ty.size() < user_m * user_k1)
+				if(user_ty.size() != user_m * user_k1)
 				{	user_ty.resize(user_m * user_k1);
 					user_py.resize(user_m * user_k1);
 				}
@@ -1165,18 +1180,26 @@ void myReverseSweep(
 				CPPAD_ASSERT_UNKNOWN( user_id    == size_t(arg[1]) );
 				CPPAD_ASSERT_UNKNOWN( user_n     == size_t(arg[2]) );
 				CPPAD_ASSERT_UNKNOWN( user_m     == size_t(arg[3]) );
-				user_state = user_end;
 
 				// call users function for this operation
-				user_atomic<Base>::reverse(user_index, user_id,
-					user_k, user_n, user_m, user_tx, user_ty,
-					user_px, user_py
+				user_atom->set_id(user_id);
+				CPPAD_ATOMIC_CALL(
+					user_k, user_tx, user_ty, user_px, user_py
 				);
+# ifndef NDEBUG
+				if( ! user_ok )
+				{	std::string msg = 
+						atomic_base<Base>::class_name(user_index)
+						+ ": atomic_base.reverse: returned false";
+					CPPAD_ASSERT_KNOWN(false, msg.c_str() );
+				}
+# endif
 				for(j = 0; j < user_n; j++) if( user_ix[j] > 0 )
 				{	for(ell = 0; ell < user_k1; ell++)
 						Partial[user_ix[j] * K + ell] +=
 							user_px[j * user_k1 + ell];
 				}
+				user_state = user_end;
 			}
 			break;
 
