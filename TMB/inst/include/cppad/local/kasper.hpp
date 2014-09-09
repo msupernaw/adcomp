@@ -405,8 +405,10 @@ void mark_tape_point_args_index(size_t index, size_t mark){
   for(int i=0;i<numarg;i++){
     if(isDepArg(&op_arg[i])){
       if(op_mark_[var2op_[op_arg[i]]]!=mark){ // Not already marked
-	op_mark_[var2op_[op_arg[i]]]=mark;
-	op_mark_index_.push_back(var2op_[op_arg[i]]);
+	if(!constant_tape_point_[var2op_[op_arg[i]]]){ // Not constant
+	  op_mark_[var2op_[op_arg[i]]]=mark;
+	  op_mark_index_.push_back(var2op_[op_arg[i]]);
+	}
       }
     }
   }
@@ -490,6 +492,17 @@ bool is_tape_point_constant(size_t index){
   const addr_t* op_arg;
   op_arg=tp1.op_arg;
   int numarg=tp2.op_arg - op_arg;
+  // Handle the user operator special case
+  if(tp1.op == UsrrvOp || tp1.op == UsrrpOp){ // Result of user atomic operation
+    bool constant=true;
+    size_t i=index;
+    while(tp_[i].op != UserOp){
+      i--;
+      constant = constant && constant_tape_point_[i];
+      if(tp1.op == UsrrvOp || tp1.op == UsrrpOp)break;
+    }
+    return constant;
+  }
   if(numarg==0)return false; // E.g. begin or end operators
   bool ans=true;
   for(int i=0;i<numarg;i++){
