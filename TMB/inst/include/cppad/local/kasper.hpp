@@ -499,7 +499,7 @@ bool is_tape_point_constant(size_t index){
     while(tp_[i].op != UserOp){
       i--;
       constant = constant && constant_tape_point_[i];
-      if(tp1.op == UsrrvOp || tp1.op == UsrrpOp)break;
+      if(tp_[i].op == UsrrvOp || tp_[i].op == UsrrpOp)break;
     }
     return constant;
   }
