@@ -159,7 +159,7 @@ $end
 template <class Base>
 class checkpoint : public atomic_base<Base> {
 private:
-	ADFun<Base> f_;
+	vector<ADFun<Base> > f_;
 public:
 	/*!
  	Constructor of a checkpoint object
@@ -183,6 +183,14 @@ public:
 	: atomic_base<Base>(name)
 	{	CheckSimpleVector< CppAD::AD<Base> , ADVector>();
 
+#ifdef _OPENMP
+#define NTHREADS omp_get_max_threads()
+#define THREAD omp_get_thread_num()
+#else
+#define NTHREADS 1
+#define THREAD 0
+#endif
+		f_.resize(NTHREADS);
 		// make a copy of ax because Independent modifies AD information
 		ADVector x_tmp(ax);
 		// delcare x_tmp as the independent variables
@@ -190,12 +198,14 @@ public:
 		// record mapping from x_tmp to ay
 		algo(x_tmp, ay); 
 		// create function f_ : x -> y
-		f_.Dependent(ay);
+		f_[0].Dependent(ay);
 		// suppress checking for nan in f_ results
 		// (see optimize documentation for atomic functions)
-		f_.check_for_nan(false);
+		f_[0].check_for_nan(false);
 		// now optimize (we expect to use this function many times).
-		f_.optimize();
+		f_[0].optimize();
+		// Copy for other threads
+		for(size_t i=1;i<NTHREADS;i++)f_[i]=f_[0];
 	}
 	/*!
 	Implement the user call to <tt>afun(ax, ay)</tt>.
@@ -235,7 +245,7 @@ public:
 		const vector<Base>&      tx ,
 		      vector<Base>&      ty )
 	{
-		CPPAD_ASSERT_UNKNOWN( f_.size_var() > 0 );
+		CPPAD_ASSERT_UNKNOWN( f_[THREAD].size_var() > 0 );
 		CPPAD_ASSERT_UNKNOWN( tx.size() % (q+1) == 0 );
 		CPPAD_ASSERT_UNKNOWN( ty.size() % (q+1) == 0 );
 		size_t n = tx.size() / (q+1);
@@ -251,13 +261,13 @@ public:
 			{	vector< std::set<size_t> > r(n);
 				for(j = 0; j < n; j++)
 					r[j].insert(j);
-				s = f_.ForSparseJac(n, r);
+				s = f_[THREAD].ForSparseJac(n, r);
 			}
 			else
 			{	vector< std::set<size_t> > r(m);
 				for(i = 0; i < m; i++)
 					r[i].insert(i);
-				s = f_.RevSparseJac(m, r);
+				s = f_[THREAD].RevSparseJac(m, r);
 			}
 			std::set<size_t>::const_iterator itr;
 			for(i = 0; i < m; i++)
@@ -270,13 +280,13 @@ public:
 				}
 			}
 		}
-		ty = f_.Forward(q, tx);
+		ty = f_[THREAD].Forward(q, tx);
 
 		// no longer need the Taylor coefficients in f_
 		// (have to reconstruct them every time)
 		size_t c = 0;
 		size_t r = 0;
-		f_.capacity_order(c, r);
+		f_[THREAD].capacity_order(c, r);
 		return ok;
 	}
 	/*!
@@ -291,14 +301,14 @@ public:
 		      vector<Base>&       px ,
 		const vector<Base>&       py )
 	{
-		CPPAD_ASSERT_UNKNOWN( f_.size_var() > 0 );
+		CPPAD_ASSERT_UNKNOWN( f_[THREAD].size_var() > 0 );
 		CPPAD_ASSERT_UNKNOWN( tx.size() % (q+1) == 0 );
 		CPPAD_ASSERT_UNKNOWN( ty.size() % (q+1) == 0 );
 		bool ok  = true;	
 
 		// put proper forward mode coefficients in f_
 # ifdef NDEBUG
-		f_.Forward(q, tx);
+		f_[THREAD].Forward(q, tx);
 # else
 		size_t n = tx.size() / (q+1);
 		size_t m = ty.size() / (q+1);
@@ -306,7 +316,7 @@ public:
 		CPPAD_ASSERT_UNKNOWN( py.size() == m * (q+1) );
 		size_t i, j, k;
 		//
-		vector<Base> check_ty = f_.Forward(q, tx);
+		vector<Base> check_ty = f_[THREAD].Forward(q, tx);
 		for(i = 0; i < m; i++)
 		{	for(k = 0; k <= q; k++)
 			{	j = i * (q+1) + k;
@@ -315,13 +325,13 @@ public:
 		}
 # endif
 		// now can run reverse mode
-		px = f_.Reverse(q+1, py);
+		px = f_[THREAD].Reverse(q+1, py);
 
 		// no longer need the Taylor coefficients in f_
 		// (have to reconstruct them every time)
 		size_t c = 0;
 		size_t r = 0;
-		f_.capacity_order(c, r);
+		f_[THREAD].capacity_order(c, r);
 		return ok;
 	}
 	/*!
@@ -335,11 +345,11 @@ public:
 		      vector< std::set<size_t> >&       s  )
 	{
 		bool ok = true;
-		s = f_.ForSparseJac(q, r);
+		s = f_[THREAD].ForSparseJac(q, r);
 
 		// no longer need the forward mode sparsity pattern
 		// (have to reconstruct them every time)
-		f_.size_forward_set(0);
+		f_[THREAD].size_forward_set(0);
 		
 		return ok; 
 	}
@@ -354,11 +364,11 @@ public:
 		      vector<bool>&                     s  )
 	{
 		bool ok = true;
-		s = f_.ForSparseJac(q, r);
+		s = f_[THREAD].ForSparseJac(q, r);
 
 		// no longer need the forward mode sparsity pattern
 		// (have to reconstruct them every time)
-		f_.size_forward_bool(0);
+		f_[THREAD].size_forward_bool(0);
 		
 		return ok; 
 	}
@@ -379,7 +389,7 @@ public:
 		// necessary when optimizer calls this member function.
 		bool transpose = true;
 		bool nz_compare = true;
-		st = f_.RevSparseJac(q, rt, transpose, nz_compare);
+		st = f_[THREAD].RevSparseJac(q, rt, transpose, nz_compare);
 
 		return ok; 
 	}
@@ -400,7 +410,7 @@ public:
 		bool nz_compare = true;
 		// 2DO: remove need for nz_compare all the time. It is only really
 		// necessary when optimizer calls this member function.
-		st = f_.RevSparseJac(q, rt, transpose, nz_compare);
+		st = f_[THREAD].RevSparseJac(q, rt, transpose, nz_compare);
 
 		return ok; 
 	}
@@ -427,7 +437,7 @@ public:
 		std::set<size_t>::const_iterator itr;
 
 		// compute sparsity pattern for T(x) = S(x) * f'(x)
-		t = f_.RevSparseJac(1, s);
+		t = f_[THREAD].RevSparseJac(1, s);
 # ifndef NDEBUG
 		for(size_t j = 0; j < n; j++)
 			CPPAD_ASSERT_UNKNOWN( vx[j] || ! t[j] )
@@ -439,7 +449,7 @@ public:
 		
 		// compute sparsity pattern for A(x) = f'(x)^T * U(x)
 		vector< std::set<size_t> > a(n);
-		a = f_.RevSparseJac(q, u, transpose);
+		a = f_[THREAD].RevSparseJac(q, u, transpose);
 
 		// set version of s
 		vector< std::set<size_t> > set_s(1);
@@ -451,8 +461,8 @@ public:
 
 		// compute sparsity pattern for H(x) = (S(x) * F)''(x) * R
 		// (store it in v)
-		f_.ForSparseJac(q, r);
-		v = f_.RevSparseHes(q, set_s, transpose);
+		f_[THREAD].ForSparseJac(q, r);
+		v = f_[THREAD].RevSparseHes(q, set_s, transpose);
 
 		// compute sparsity pattern for V(x) = A(x) + H(x)
 		for(i = 0; i < n; i++)
@@ -465,7 +475,7 @@ public:
 
 		// no longer need the forward mode sparsity pattern
 		// (have to reconstruct them every time)
-		f_.size_forward_set(0);
+		f_[THREAD].size_forward_set(0);
 
 		return ok;
 	}
@@ -493,7 +503,7 @@ public:
 		size_t i, j;
 
 		// compute sparsity pattern for T(x) = S(x) * f'(x)
-		t = f_.RevSparseJac(1, s);
+		t = f_[THREAD].RevSparseJac(1, s);
 # ifndef NDEBUG
 		for(j = 0; j < n; j++)
 			CPPAD_ASSERT_UNKNOWN( vx[j] || ! t[j] )
@@ -505,12 +515,12 @@ public:
 
 		// compute sparsity pattern for A(x) = f'(x)^T * U(x)
 		vector<bool> a(n * q);
-		a = f_.RevSparseJac(q, u, transpose);
+		a = f_[THREAD].RevSparseJac(q, u, transpose);
 
 		// compute sparsity pattern for H(x) =(S(x) * F)''(x) * R
 		// (store it in v)
-		f_.ForSparseJac(q, r);
-		v = f_.RevSparseHes(q, s, transpose);
+		f_[THREAD].ForSparseJac(q, r);
+		v = f_[THREAD].RevSparseHes(q, s, transpose);
 
 		// compute sparsity pattern for V(x) = A(x) + H(x)
 		for(i = 0; i < n; i++)
@@ -520,7 +530,7 @@ public:
 
 		// no longer need the forward mode sparsity pattern
 		// (have to reconstruct them every time)
-		f_.size_forward_set(0);
+		f_[THREAD].size_forward_set(0);
 
 		return ok;
 	}
@@ -528,3 +538,6 @@ public:
 
 } // END_CPPAD_NAMESPACE
 # endif
+
+#undef NTHREADS
+#undef THREAD
