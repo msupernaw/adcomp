@@ -54,8 +54,10 @@ private:
 	pod_vector<addr_t> vecad_ind_rec_;
 
 	/// The operation argument indices in the recording
-	//pod_vector<addr_t> op_arg_rec_;
+public:
+	pod_vector<addr_t> op_arg_rec_;
 
+private:
 	/// The parameters in the recording.
 	/// Note that Base may not be plain old data, so use false in consructor.
 	pod_vector<Base> par_rec_;
@@ -66,7 +68,6 @@ private:
 
 // --------------- Functions used to create and maniplate a recording -------
 public:
-	pod_vector<addr_t> op_arg_rec_;
 	/// Default constructor
 	player(void) : 
 	num_var_rec_(0)                                      ,
