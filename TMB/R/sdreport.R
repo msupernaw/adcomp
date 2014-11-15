@@ -50,6 +50,9 @@ sdreport <- function(obj,par.fixed=NULL,hessian.fixed=NULL,getJointPrecision=FAL
     stop("Cannot calculate sd's without type ADGrad available in object for random effect models.")
   ## Make object to calculate ADREPORT vector
   obj2 <- MakeADFun(obj$env$data,obj$env$parameters,type="ADFun",ADreport=TRUE,DLL=obj$env$DLL)
+  obj2$env$tracemgc <- obj$env$tracemgc
+  obj2$env$inner.control$trace <- obj$env$inner.control$trace
+  obj2$env$silent <- obj$env$silent
   r <- obj$env$random
   ## Get full parameter (par), Fixed effects parameter (par.fixed)
   ## and fixed effect gradient (gradient.fixed)
@@ -88,8 +91,8 @@ sdreport <- function(obj,par.fixed=NULL,hessian.fixed=NULL,getJointPrecision=FAL
   } else { ## Something to report - get derivatives
     Dphi <- obj2$gr(par)
     if(!is.null(r)){
-      Dphi.random <- Dphi[,r]
-      Dphi.fixed <- Dphi[,-r]
+      Dphi.random <- Dphi[,r,drop=FALSE]
+      Dphi.fixed <- Dphi[,-r,drop=FALSE]
       if(all(Dphi.random==0)){ ## Fall back to simple case
         simpleCase <- TRUE
         Dphi <- Dphi.fixed

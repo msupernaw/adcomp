@@ -8,9 +8,9 @@ public:						\
 typedef scalartype_ scalartype;			\
 typedef vector<scalartype> vectortype;		\
 typedef matrix<scalartype> matrixtype;		\
-typedef array<scalartype> arraytype;
+typedef array<scalartype> arraytype
 
-#define VARIANCE_NOT_YET_IMPLEMENTED vectortype variance(){};
+#define VARIANCE_NOT_YET_IMPLEMENTED vectortype variance(){}
 
 /** \brief Multivariate normal distribution with user supplied covariance matrix
 
@@ -190,11 +190,14 @@ class N01{
   TYPEDEFS(scalartype_);
 public:
   /** \brief Evaluate the negative log density */
-  scalartype operator()(array<scalartype> x){
-    return (x*x*.5 + log(sqrt(2.0*M_PI)) ).sum() ;
-  }
   scalartype operator()(scalartype x){
     return x*x*.5 + log(sqrt(2.0*M_PI));
+  }
+  scalartype operator()(vectortype x){
+    return (x*x*scalartype(.5) + scalartype(log(sqrt(2.0*M_PI))) ).sum() ;
+  }
+  scalartype operator()(arraytype x){
+    return (x*x*scalartype(.5) + scalartype(log(sqrt(2.0*M_PI))) ).sum() ;
   }
   arraytype jacobian(arraytype x){return x;}
   int ndim(){return 1;}
@@ -668,7 +671,7 @@ public:
   }
   /* Quadratic form: x'*Q^order*x */
   scalartype Quadform(vectortype x){
-    return (x*(Q*x)).sum();
+    return (x*(Q*x.matrix()).array()).sum();
   }
   scalartype operator()(vectortype x){
     return -scalartype(.5)*logdetQ + scalartype(.5)*Quadform(x) + x.size()*scalartype(log(sqrt(2.0*M_PI)));
@@ -691,6 +694,13 @@ public:
     return ans;
   }
 };
+/** \brief Evaluate density of Gaussian Markov Random Field (GMRF) for sparse Q
+
+  For detailed explanation of GMRFs see the class definition @ref GMRF_t
+  \param Q precission matrix
+  \param order Convolution order, i.e. the precission matrix is Q^order (matrix product)
+
+*/
 template <class scalartype>
 GMRF_t<scalartype> GMRF(Eigen::SparseMatrix<scalartype> Q, int order=1){
   return GMRF_t<scalartype>(Q, order);

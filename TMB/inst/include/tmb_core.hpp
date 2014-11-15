@@ -76,6 +76,7 @@ extern "C"{
     for(int i=0;i<1000;i++){ // 122 seems to be sufficient.
       if(memory_manager.counter>0){
 	R_gc();
+	R_RunExitFinalizers();
       }
     }
     if(memory_manager.counter>0)error("Failed to clean. Please manually clean up before unloading\n");
@@ -173,10 +174,12 @@ Levels: d e f g h i j
 #define DATA_SPARSE_MATRIX(name) Eigen::SparseMatrix<Type> name(tmbutils::asSparseMatrix<Type>( \
 	getListElement(objective_function::data,#name,&isValidSparseMatrix)));
 // NOTE: REPORT() constructs new SEXP so never report in parallel!
-/** \brief Report scalar, vector or array back to R without derivative information */
+/** \brief Report scalar, vector or array back to R without derivative information. Important: \c REPORT(name) must not be used before \c name has been assigned a value */
 #define REPORT(name) if(isDouble<Type>::value && this->current_parallel_region<0){          \
                         defineVar(install(#name),asSEXP(name),objective_function::report);}
-/** \brief Report scalar, vector or array back to R with derivative information */
+/** \brief Report scalar, vector or array back to R with derivative information. 
+ The result is retrieved in R via the R function \c sdreport().
+ Important: \c ADREPORT(name) must not be used before \c name has been assigned a value*/
 #define ADREPORT(name) objective_function::reportvector.push(name,#name);
 #define PARALLEL_REGION if(this->parallel_region())
 /** \brief Get data array from R and declare it as array<Type> */
@@ -608,9 +611,9 @@ SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
   PROTECT(hessianrows=getListElement(control,"hessianrows"));
   int nrows=length(hessianrows);
   if((nrows>0)&(nrows!=ncols))error("hessianrows and hessianrows must have same length");
-  vector<int> cols(ncols);    
-  vector<int> cols0(ncols);
-  vector<int> rows(nrows);
+  vector<size_t> cols(ncols);
+  vector<size_t> cols0(ncols);
+  vector<size_t> rows(nrows);
   if(ncols>0){
     for(int i=0;i<ncols;i++){
       cols[i]=INTEGER(hessiancols)[i]-1; //R-index -> C-index
@@ -732,9 +735,13 @@ extern "C"
     int returnReport = INTEGER(getListElement(control,"report"))[0];
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res,info;
+    SEXP par,res=NULL,info;
     objective_function< double > F(data,parameters,report);
+#ifdef _OPENMP
     int n=F.count_parallel_regions(); // Evaluates user template
+#else
+    F.count_parallel_regions(); // Evaluates user template
+#endif
     if(returnReport && F.reportvector.size()==0){
       /* Told to report, but no ADREPORT in template: Get out quickly */
       return R_NilValue;
@@ -916,6 +923,7 @@ ADFun< double >* MakeADGradObject(SEXP data, SEXP parameters, SEXP report, int p
   vector< AD<AD<double> > > y(1);
   y[0]=F();
   ADFun<AD<double> > tmp(F.theta,y);
+  tmp.optimize(); /* Remove 'dead' operations (could result in nan derivatives) */
   vector<AD<double> > x(n);
   for(int i=0;i<n;i++)x[i]=CppAD::Value(F.theta[i]);
   vector<AD<double> > yy(n);
@@ -937,9 +945,13 @@ extern "C"
     if(!isEnvironment(report))error("'report' must be an environment");
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res;
+    SEXP par,res=NULL;
     objective_function< double > F(data,parameters,report);
+#ifdef _OPENMP
     int n=F.count_parallel_regions(); // Evaluates user template
+#else
+    F.count_parallel_regions(); // Evaluates user template
+#endif
     PROTECT(par=F.defaultpar());
 
     if(_openmp){ // Parallel mode

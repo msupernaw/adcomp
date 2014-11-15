@@ -7,7 +7,13 @@ profiletargets = $(intersection:=.profile)
 %.output.RData : %.R %.cpp
 	unset MAKEFLAGS; example=$(basename $<) R --vanilla < unittest.R
 
-report: $(outputfiles)
+all: $(outputfiles)
+	make report
+
+$(intersection) : % : %.output.RData
+	
+
+report:
 	R --vanilla < unittest.R
 
 clean :

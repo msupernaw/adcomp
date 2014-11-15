@@ -1,8 +1,21 @@
 /** \file
     \brief Gamma function and gamma probability densities
 */
+
+/** \brief Logarithm of gamma function (following R argument convention).
+*/
+template<class Type>
+Type lgamma(Type x){
+  CppAD::vector<Type> tx(2);
+  tx[0] = x;
+  tx[1] = Type(0);
+  return atomic::D_lgamma(tx)[0];
+}
+VECTORIZE1_t(lgamma)
+
+/* Old lgamma approximation */
 template <class Type>
-inline Type lgamma(const Type &y)
+inline Type lgamma_approx(const Type &y)
 {
   /* coefficients for gamma=7, kmax=8  Lanczos method */
   static const Type
@@ -46,6 +59,7 @@ inline Type dnbinom(const Type &x, const Type &size, const Type &prob,
     n*log(p)+x*log(Type(1)-p);
   if (give_log) return logres; else return exp(logres);
 }
+VECTORIZE4_ttti(dnbinom)
 
 /** \brief Negative binomial probability function.
   \ingroup R_style_distribution
@@ -57,9 +71,10 @@ inline Type dnbinom2(const Type &x, const Type &mu, const Type &var,
 		    int give_log=0)
 {
   Type p=mu/var;
-  Type n=mu*p/(1-p);
+  Type n=mu*p/(Type(1)-p);
   return dnbinom(x,n,p,give_log);
 }
+VECTORIZE4_ttti(dnbinom2)
 
 /** \brief Poisson probability function. 
   \ingroup R_style_distribution
@@ -71,6 +86,7 @@ inline Type dpois(const Type &x, const Type &lambda, int give_log=0)
   Type logres = -lambda + x*log(lambda) - lgamma(x+Type(1));
   if (give_log) return logres; else return exp(logres);
 }
+VECTORIZE3_tti(dpois)
 
 /** \brief Density of X where X~gamma distributed 
   \ingroup R_style_distribution
@@ -81,6 +97,7 @@ Type dgamma(Type y, Type shape, Type scale, int give_log=0)
   Type logres=-lgamma(shape)+(shape-Type(1.0))*log(y)-y/scale-shape*log(scale);
   if(give_log)return logres; else return exp(logres);
 }
+VECTORIZE4_ttti(dgamma)
 
 /** \brief Density of log(X) where X~gamma distributed 
   \ingroup R_style_distribution
@@ -90,4 +107,53 @@ inline Type dlgamma(Type y, Type shape, Type scale, int give_log=0)
 {
   Type logres=-lgamma(shape)-shape*log(scale)-exp(y)/scale+shape*y;
   if(give_log)return logres; else return exp(logres);
+}
+VECTORIZE4_ttti(dlgamma)
+
+/** \brief Zero-Inflated Poisson probability function. 
+  \ingroup R_style_distribution
+* \details
+    \param zip is the probaility of having extra zeros 
+*/
+template<class Type>
+inline Type dzipois(const Type &x, const Type &lambda, const Type &zip, int give_log=0)
+{
+  Type logres;
+  if (x==Type(0)) logres=log(zip + (Type(1)-zip)*dpois(x, lambda, false)); 
+  else logres=log(Type(1)-zip) + dpois(x, lambda, true);
+  if (give_log) return logres; else return exp(logres);
+}
+VECTORIZE4_ttti(dzipois)
+
+/** \brief Zero-Inflated negative binomial probability function. 
+  \ingroup R_style_distribution
+* \details
+    Parameterized through size and prob parameters, following R-convention.
+    No vectorized version is currently available.
+    \param zip is the probaility of having extra zeros 
+*/
+template<class Type>
+inline Type dzinbinom(const Type &x, const Type &size, const Type &p, const Type & zip,
+		    int give_log=0)
+{
+  Type logres;
+  if (x==Type(0)) logres=log(zip + (Type(1)-zip)*dnbinom(x, size, p, false)); 
+  else logres=log(Type(1)-zip) + dnbinom(x, size, p, true);
+  if (give_log) return logres; else return exp(logres);
+}
+
+/** \brief Zero-Inflated negative binomial probability function. 
+  \ingroup R_style_distribution
+* \details
+    Alternative parameterization through mean and variance parameters (conditional on not being an extra zero).
+    No vectorized version is currently available.
+    \param zip is the probaility of having extra zeros 
+*/
+template<class Type>
+inline Type dzinbinom2(const Type &x, const Type &mu, const Type &var, const Type & zip,
+		    int give_log=0)
+{
+  Type p=mu/var;
+  Type n=mu*p/(Type(1)-p);
+  return dzinbinom(x,n,p,zip,give_log);
 }
