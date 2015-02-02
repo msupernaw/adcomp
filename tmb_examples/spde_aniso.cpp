@@ -1,3 +1,4 @@
+// Anisotropic version of "spde.cpp". 
 #include <TMB.hpp>
 
 template<class Type>
@@ -25,16 +26,19 @@ Type objective_function<Type>::operator() ()
 
   Type nll = 0.0;
 
-  // Need to parameterize H matrix such that
+  // Need to parameterize H matrix such that det(H)=1 (preserving volume) 
+  // Note that H appears in (20) in Lindgren et al 2011
   matrix<Type> H(2,2);
   H(0,0) = exp(ln_H_input(0));
   H(1,0) = ln_H_input(1);
   H(0,1) = ln_H_input(1);
   H(1,1) = (1+ln_H_input(1)*ln_H_input(1)) / exp(ln_H_input(0));
   SparseMatrix<Type> Q = Q_spde(spde,kappa,H);
-
+  REPORT(H)
+  
   nll = GMRF(Q)(x);									// Negative log likelihood
 
+  // Weibull likelihood with cencoring
   vector<Type> Xbeta = X*beta;  
   for(int i=0; i<time.size(); i++){    
     Type eta = Xbeta(i) + x(meshidxloc(i))/tau;
