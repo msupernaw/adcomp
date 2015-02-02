@@ -6,7 +6,7 @@ library(TMB)
 compile("spde.cpp")
 dyn.load(dynlib("spde"))
 
-# Sets up model and mesh in INLA
+# Sets INLA mesh. Read R-INLA documentation about how to do this
 require(splancs)
 require(rgl)
 require(INLA)
@@ -53,6 +53,3 @@ opt1 <- nlminb(obj$par,obj$fn,obj$gr,lower=L,upper=U)
 # Phase 2: Include spatial part. Use starting values from phase 1
 obj <- MakeADFun(data,parameters,random="x",DLL="spde")
 opt <- nlminb(opt1$par,obj$fn,obj$gr,lower=L,upper=U)
-
-
-# Maybe some nice plots here.....

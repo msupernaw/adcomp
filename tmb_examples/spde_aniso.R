@@ -40,9 +40,11 @@ data <- list(time=Leuk$time,notcens=Leuk$cens,meshidxloc=mesh$idx$loc-1,X=as.mat
 
 # SPDE part
 spde = inla.spde2.matern(mesh, alpha=2)
+
+# ---------- Start code that prepare objects for anisotropy. Should not be modified when you make your own example
 Dset = 1:2
 # Triangle info
-TV = mesh$graph$tv       # Triangle to vertex indexing
+TV = mesh$graph$tv       	 # Triangle to vertex indexing
 V0 = mesh$loc[TV[,1],Dset]   # V = vertices for each triangle
 V1 = mesh$loc[TV[,2],Dset]
 V2 = mesh$loc[TV[,3],Dset]
@@ -53,6 +55,9 @@ E2 = V1 - V0
 TmpFn = function(Vec1,Vec2) abs(det( rbind(Vec1,Vec2) ))
 Tri_Area = rep(NA, nrow(E0))
 for(i in 1:length(Tri_Area)) Tri_Area[i] = TmpFn( E0[i,],E1[i,] )/2   # T = area of each triangle
+# ---------- End code that prepare objects for anisotropy. 
+
+
 data$spde <- list(
       "n_s"=spde$n.spde,
       "n_tri"=nrow(TV),
@@ -72,5 +77,3 @@ L=c(-7,-1,-1,-1,-1,-3.0,2.0,c(-10,-10),log(0.1))
 U=c(-4,1,1,1,1,-1.0,3.0,c(10,10),log(10.0))
 opt <- nlminb(obj$par,obj$fn,obj$gr,lower=L,upper=U)
 
-
-# Maybe some nice plots here.....
