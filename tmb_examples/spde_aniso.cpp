@@ -1,4 +1,4 @@
-// Anisotropic version of "spde.cpp". 
+// Anisotropic version of "spde.cpp".
 #include <TMB.hpp>
 
 template<class Type>
@@ -11,15 +11,15 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR(time);
   DATA_IVECTOR(notcens);
   DATA_IVECTOR(meshidxloc);
-  DATA_MATRIX(X);    
+  DATA_MATRIX(X);
   DATA_STRUCT(spde,spde_aniso_t);
-  PARAMETER_VECTOR(beta);      
+  PARAMETER_VECTOR(beta);
   PARAMETER(log_tau);
   PARAMETER(log_kappa);
   PARAMETER_VECTOR(ln_H_input);
-  PARAMETER(log_alpha);  
-  PARAMETER_VECTOR(x);  
-  
+  PARAMETER(log_alpha);
+  PARAMETER_VECTOR(x);
+
   Type tau = exp(log_tau);
   Type kappa = exp(log_kappa);
   Type alpha = exp(log_alpha);
@@ -35,8 +35,8 @@ Type objective_function<Type>::operator() ()
   H(1,1) = (1+ln_H_input(1)*ln_H_input(1)) / exp(ln_H_input(0));
   SparseMatrix<Type> Q = Q_spde(spde,kappa,H);
   REPORT(H)
-  
-  nll = GMRF(Q)(x);									// Negative log likelihood
+
+  nll = GMRF(Q)(x);                              // Negative log likelihood
 
   // Weibull likelihood with cencoring
   vector<Type> Xbeta = X*beta;  
@@ -44,8 +44,8 @@ Type objective_function<Type>::operator() ()
     Type eta = Xbeta(i) + x(meshidxloc(i))/tau;
     Type lambda = exp(eta);
     Type t_alpha = pow(time(i),alpha);
-    Type S = exp(-lambda*t_alpha);         		// Survival funciton
-    Type f = lambda*alpha*t_alpha/time(i)*S; 	// Densities
+    Type S = exp(-lambda*t_alpha);               // Survival function
+    Type f = lambda*alpha*t_alpha/time(i)*S;     // Densities
 
     // Likelihood contribution depends on truncation status
     if(notcens(i))
