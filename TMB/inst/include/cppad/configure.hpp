@@ -76,7 +76,7 @@ If this symbol is one, an implicit constor of AD<Base> is defined
 where the argument has any type.
 Otherwise this constructor is explicit.
 */
-# define CPPAD_IMPLICIT_CTOR_FROM_ANY_TYPE 0
+# define CPPAD_IMPLICIT_CTOR_FROM_ANY_TYPE 1
 
 /*!
 \def CPPAD_BOOSTVECTOR
