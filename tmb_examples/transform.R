@@ -3,7 +3,7 @@ set.seed(123)
 n <- 1000
 phi <- .6
 u <- numeric(n)
-u[0] = rnorm(1)
+u[1] = rnorm(1)
 for(i in 2:n){
     u[i] = phi * u[i-1] + rnorm(1, sd = sqrt(1 - phi^2))
 }
