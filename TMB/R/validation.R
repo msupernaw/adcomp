@@ -428,12 +428,15 @@ oneStepPredict <- function(obj,
                 F2 <- integrate(function(x)exp(-(spline(x) - nll)),
                                 obs[index] + discrete,
                                 spline.range[2])$value
+                mean <- integrate(function(x)exp(-(spline(x) - nll)) * x,
+                                  spline.range[1],
+                                  spline.range[2])$value / (F1 + F2)
                 ## Was:
                 ##  F1 <- integrate(Vectorize( function(x)nan2zero( exp(-(f(x) - nll)) ) ), -Inf, obs[index])$value
                 ##  F2 <- integrate(Vectorize( function(x)nan2zero( exp(-(f(x) - nll)) ) ), obs[index], Inf)$value
                 nlcdf.lower = nll - log(F1)
                 nlcdf.upper = nll - log(F2)
-                c(nll=nll, nlcdf.lower=nlcdf.lower, nlcdf.upper=nlcdf.upper)
+                c(nll=nll, nlcdf.lower=nlcdf.lower, nlcdf.upper=nlcdf.upper, mean=mean)
             })
             if(is(ans, "try-error")) ans <- NaN
             ans
