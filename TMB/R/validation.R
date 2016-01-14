@@ -110,7 +110,9 @@
 ##' @param parallel Run in parallel using the \code{parallel} package?
 ##' @param trace Trace progress?
 ##' @param ... Control parameters for OSA method
-##' @return \code{data.frame} with OSA residuals in column \code{residual}.
+##' @return \code{data.frame} with OSA \emph{standardized} residuals
+##' in column \code{residual}. Depending on the method the output may
+##' also include OSA expected observation in column \code{mean}.
 ##' @examples
 ##' ######################## Gaussian case
 ##' runExample("simple")
