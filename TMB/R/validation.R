@@ -351,7 +351,7 @@ oneStepPredict <- function(obj,
             g <- function(y){
                 newobj$gr(observation(k, y))[obs.pointer[k]]
             }
-            c(nll = f(obs[index]), grad = g(obs[index]))
+            c(observation=obs[index], nll = f(obs[index]), grad = g(obs[index]))
         }
         pred <- do.call("rbind", lapply(1:length(subset), oneStepGaussian))
         pred <- as.data.frame(pred)
@@ -376,7 +376,10 @@ oneStepPredict <- function(obj,
             R <- sign(grad) * Rabs
             R
         }
-        pred$residual <- getResid( diff( c(nll0, pred$nll) ), pred$grad )
+        R <- getResid( diff( c(nll0, pred$nll) ), pred$grad )
+        M <- pred$observation - ifelse(pred$grad != 0, R * (R / pred$grad), 0)
+        pred$mean <- M
+        pred$residual <- R
     }
 
     ## ######################### CASE: oneStepGeneric
