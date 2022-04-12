@@ -30,7 +30,7 @@ using gamma_utils::Rf_gamma_cody;
 
 /* Selected functions may be called ignoring derivatives */
 template<class T> int R_finite(T x) { return std::isfinite(asDouble(x)); }
-template<class T> int isnan(T x) { return bessel::isnan(asDouble(x)); }
+template<class T> int isnan(T x) { return std::isnan(asDouble(x)); }
 
 /* Common defines for Rmath routines */
 #undef ML_ERROR
