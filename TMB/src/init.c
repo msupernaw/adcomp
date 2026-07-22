@@ -27,6 +27,8 @@ SEXP tmb_ichol_update(SEXP X, SEXP Y, SEXP get_error);
 SEXP tmb_ichol_adjoint_update(SEXP X);
 SEXP tmb_ldl_update(SEXP X, SEXP Y);
 SEXP tmb_ldl_deriv(SEXP L);
+SEXP tmb_sdreport_get_uncertainty(SEXP rep, SEXP name);
+SEXP tmb_sdreport_get_scalar_estimate_sd(SEXP rep, SEXP name);
 
 static R_CallMethodDef CallEntries[] = {
     CALLDEF(omp_num_threads, 1),
@@ -49,6 +51,8 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(tmb_ichol_adjoint_update, 1),
     CALLDEF(tmb_ldl_update, 2),
     CALLDEF(tmb_ldl_deriv, 1),
+    CALLDEF(tmb_sdreport_get_uncertainty, 2),
+    CALLDEF(tmb_sdreport_get_scalar_estimate_sd, 2),
     {NULL, NULL, 0}
 };
 
@@ -56,6 +60,8 @@ void R_init_TMB(DllInfo *dll)
 {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, (Rboolean)FALSE);
+    R_RegisterCCallable("TMB", "tmb_sdreport_get_uncertainty", (DL_FUNC) &tmb_sdreport_get_uncertainty);
+    R_RegisterCCallable("TMB", "tmb_sdreport_get_scalar_estimate_sd", (DL_FUNC) &tmb_sdreport_get_scalar_estimate_sd);
     M_R_cholmod_start(&c);
     c.error_handler = NULL; // Disable CHOLMOD warnings
 }

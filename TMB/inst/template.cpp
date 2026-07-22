@@ -35,6 +35,9 @@ Type objective_function<Type>::operator() ()
 
      REPORT(x)
      ADREPORT(x)
+    SDREPORT_FIXED(x)
+    SDREPORT_RANDOM(x)
+    SDREPORT_DERIVED(x)
 
      ** Basic constructors:
 

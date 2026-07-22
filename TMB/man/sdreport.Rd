@@ -133,6 +133,14 @@ ADREPORTed variables are bias corrected in the specified number of
 chunks.
 Also note that \code{skip.delta.method} may be necessary when bias
 correcting a large number of variables.
+
+The C++ macros \code{SDREPORT_FIXED()}, \code{SDREPORT_RANDOM()} and
+\code{SDREPORT_DERIVED()} provide a small registration layer on top of
+\code{sdreport()}. Registered quantities can be extracted with
+\code{summary(rep, "uncertainty")}. Derived registrations also behave
+like \code{ADREPORT()}. The registered payload is also stored in
+\code{rep$uncertainty} in a C++-friendly form that can be read with the
+header helper \code{sdreport_access}.
 }
 \examples{
 \dontrun{
@@ -144,11 +152,48 @@ rep <- sdreport(obj)
 summary(rep, "random")                      ## Only random effects
 summary(rep, "fixed", p.value = TRUE)       ## Only non-random effects
 summary(rep, "report")                      ## Only report
+summary(rep, "uncertainty")                 ## Only C++ registered quantities
+
+## If the C++ template registered a scalar quantity using e.g.
+## SDREPORT_DERIVED(total_mortality):
+sdreport_estimate_sd(rep, "total_mortality")
 
 ## Bias correction
 rep <- sdreport(obj, bias.correct = TRUE)
 summary(rep, "report") }                    ## Include bias correction
 }
 \seealso{
-\code{\link{summary.sdreport}}, \code{\link{print.sdreport}}, \code{\link{as.list.sdreport}}
+\code{\link{summary.sdreport}}, \code{\link{print.sdreport}}, \code{\link{as.list.sdreport}},
+\code{\link{sdreport_uncertainty}}, \code{\link{sdreport_estimate_sd}}
+}
+
+\section{Access from C++ consumers}{
+The helper \code{sdreport_uncertainty(rep, name = NULL)} exposes the
+registered uncertainty payload. Downstream packages can also call the
+native symbol \code{tmb_sdreport_get_uncertainty} via
+\code{R_GetCCallable("TMB", "tmb_sdreport_get_uncertainty")}. This is
+intended for C++ integration layers (for example FIMS) that need
+estimate and standard error arrays after \code{sdreport()} has been
+constructed.
+
+For scalar quantities a dedicated accessor is available through
+\code{sdreport_estimate_sd(rep, name)} and the C-callable symbol
+\code{tmb_sdreport_get_scalar_estimate_sd}.
+
+A minimal C++ consumer pattern (e.g. in FIMS) is:
+\preformatted{
+#include <TMB.hpp>
+
+std::pair<double, double> get_scalar(SEXP rep, const char* name) {
+  return tmb_get_sdreport_scalar(rep, name);
+}
+}
+
+End-to-end workflow:
+\enumerate{
+\item Register with C++ macros (for example \code{SDREPORT_DERIVED(total_mortality)}).
+\item Build \code{rep <- sdreport(obj)}.
+\item Extract in R via \code{sdreport_estimate_sd(rep, "total_mortality")}.
+\item Extract in C++ via \code{tmb_get_sdreport_scalar(rep, "total_mortality")}.
+}
 }

@@ -2,53 +2,53 @@
 ## License: GPL-2
 
 ## Utilities
-grepRandomParameters <- function(parameters,random){
-  r <- sort(unique(unlist(lapply(random,function(regexp)grep(regexp,names(parameters))))))
-  tmp <- lapply(parameters,function(x)x*0)
-  tmp[r] <- lapply(tmp[r],function(x)x*0+1)
+grepRandomParameters <- function(parameters, random) {
+  r <- sort(unique(unlist(lapply(random, function(regexp) grep(regexp, names(parameters))))))
+  tmp <- lapply(parameters, function(x) x * 0)
+  tmp[r] <- lapply(tmp[r], function(x) x * 0 + 1)
   which(as.logical(unlist(tmp)))
 }
 
 ## unlist name handling is extremely slow and we *almost* never use it
 ## New default: use.names=FALSE
-unlist <- function (x, recursive = TRUE, use.names = FALSE) {
-    base::unlist(x, recursive, use.names)
+unlist <- function(x, recursive = TRUE, use.names = FALSE) {
+  base::unlist(x, recursive, use.names)
 }
 
 ## Assign without losing other attributes than 'names' (which may get
 ## overwritten when subsetting)
-"keepAttrib<-" <- function(x, value){
-    attr <- attributes(x)
-    keep <- setdiff(names(attr), "names")
-    x <- value
-    attributes(x)[keep] <- attr[keep]
-    x
+"keepAttrib<-" <- function(x, value) {
+  attr <- attributes(x)
+  keep <- setdiff(names(attr), "names")
+  x <- value
+  attributes(x)[keep] <- attr[keep]
+  x
 }
 
 ## Associate a 'map' with *one* entry in a parameter list
 updateMap <- function(parameter.entry, map.entry) {
-    ## Shortened parameter
-    ans <- tapply(parameter.entry, map.entry, mean)
-    if(length(ans) == 0) ans <- as.numeric(ans) ## (zero-length case)
-    ## Integer code used to fill short into original shape
-    fnew <- unclass(map.entry)
-    fnew[!is.finite(fnew)] <- 0L
-    fnew <- fnew - 1L
-    ## Output
-    attr(ans,"shape") <- parameter.entry
-    attr(ans,"map") <- fnew
-    attr(ans,"nlevels") <- length(ans)
-    ans
+  ## Shortened parameter
+  ans <- tapply(parameter.entry, map.entry, mean)
+  if (length(ans) == 0) ans <- as.numeric(ans) ## (zero-length case)
+  ## Integer code used to fill short into original shape
+  fnew <- unclass(map.entry)
+  fnew[!is.finite(fnew)] <- 0L
+  fnew <- fnew - 1L
+  ## Output
+  attr(ans, "shape") <- parameter.entry
+  attr(ans, "map") <- fnew
+  attr(ans, "nlevels") <- length(ans)
+  ans
 }
 
 ## Guess name of user's loaded DLL code
-getUserDLL <- function(){
-    dlls <- getLoadedDLLs()
-    isTMBdll <- function(dll)!is(try(getNativeSymbolInfo("MakeADFunObject",dll),TRUE),"try-error")
-    TMBdll <- sapply(dlls, isTMBdll)
-    if(sum(TMBdll) == 0) stop("There are no TMB models loaded (use 'dyn.load').")
-    if(sum(TMBdll) >1 ) stop("Multiple TMB models loaded. Failed to guess DLL name.")
-    names(dlls[TMBdll])
+getUserDLL <- function() {
+  dlls <- getLoadedDLLs()
+  isTMBdll <- function(dll) !is(try(getNativeSymbolInfo("MakeADFunObject", dll), TRUE), "try-error")
+  TMBdll <- sapply(dlls, isTMBdll)
+  if (sum(TMBdll) == 0) stop("There are no TMB models loaded (use 'dyn.load').")
+  if (sum(TMBdll) > 1) stop("Multiple TMB models loaded. Failed to guess DLL name.")
+  names(dlls[TMBdll])
 }
 
 ## Un-exported functions that we need
@@ -56,9 +56,9 @@ getUserDLL <- function(){
 
 ## Update cholesky factorization ( of H+t*I ) avoiding copy overhead
 ## by writing directly to L(!).
-updateCholesky <- function(L, H, t=0){
-  if (inherits(L,"dCHMsuper")) {
-    .Call("tmb_destructive_CHM_update", L, H, t, PACKAGE="TMB")
+updateCholesky <- function(L, H, t = 0) {
+  if (inherits(L, "dCHMsuper")) {
+    .Call("tmb_destructive_CHM_update", L, H, t, PACKAGE = "TMB")
   } else {
     attr(L, "methods")$updateCholesky(L, H, t)
   }
@@ -66,12 +66,12 @@ updateCholesky <- function(L, H, t=0){
 
 ## Solve H x = y using super nodal sparse Cholesky factor
 ## Optionally refine solution iteratively (if H is not the exact Hessian)
-solveCholesky <- function(L, y, iterative.refinement=FALSE) {
-  if (inherits(L,"dCHMsuper")) {
-    x <- .Call("tmb_CHMfactor_solve", L, y, PACKAGE="TMB")
+solveCholesky <- function(L, y, iterative.refinement = FALSE) {
+  if (inherits(L, "dCHMsuper")) {
+    x <- .Call("tmb_CHMfactor_solve", L, y, PACKAGE = "TMB")
     if (iterative.refinement &&
-        !is.null(iterative.refine <- attr(L, "iterative_refinement"))) {
-        x <- iterative.refine(L=L, x=x, y=y)
+      !is.null(iterative.refine <- attr(L, "iterative_refinement"))) {
+      x <- iterative.refine(L = L, x = x, y = y)
     }
     x
   } else {
@@ -81,7 +81,7 @@ solveCholesky <- function(L, y, iterative.refinement=FALSE) {
 
 ## Get determinant
 determinant <- function(L, ...) {
-  if (inherits(L,"dCHMsuper")) {
+  if (inherits(L, "dCHMsuper")) {
     Matrix::determinant(L, ...)
   } else {
     attr(L, "methods")$logdet(L, ...)
@@ -90,56 +90,60 @@ determinant <- function(L, ...) {
 
 ## Get determinant derivatives
 solveSubset2 <- function(L) {
-  if (inherits(L,"dCHMsuper")) {
-    .Call("tmb_invQ_tril_halfdiag", L, PACKAGE="TMB")
+  if (inherits(L, "dCHMsuper")) {
+    .Call("tmb_invQ_tril_halfdiag", L, PACKAGE = "TMB")
   } else {
     attr(L, "methods")$logdetHalfDeriv(L)
   }
 }
 
 ## Construct funtion to do iterative refinement
-iterativeRefine <- function(obj, maxit=50, abstol=1e-12, trace=!obj$env$silent) {
-    Hmult <- function(x) {
-        r <- rep(0, length(obj$env$par))
-        r[obj$env$random] <- x
-        obj$env$f(obj$env$last.par,
-                  order=1,
-                  type="ADGrad",
-                  rangeweight=r)[obj$env$random]
+iterativeRefine <- function(obj, maxit = 50, abstol = 1e-12, trace = !obj$env$silent) {
+  Hmult <- function(x) {
+    r <- rep(0, length(obj$env$par))
+    r[obj$env$random] <- x
+    obj$env$f(obj$env$last.par,
+      order = 1,
+      type = "ADGrad",
+      rangeweight = r
+    )[obj$env$random]
+  }
+  function(L, x, y) {
+    for (i in seq_len(maxit)) {
+      Hx <- as.numeric(Hmult(x)) ## H %*% x
+      error <- y - Hx
+      if (trace) print(max(abs(error)))
+      mgc <- max(abs(error))
+      if (mgc < abstol) break
+      x <- x + .Call("tmb_CHMfactor_solve", L, error, PACKAGE = "TMB")
     }
-    function(L, x, y) {
-        for (i in seq_len(maxit)) {
-            Hx <- as.numeric(Hmult(x)) ## H %*% x
-            error <- y - Hx
-            if (trace) print (max(abs(error)))
-            mgc <- max(abs(error))
-            if (mgc < abstol) break
-            x <- x + .Call("tmb_CHMfactor_solve", L, error, PACKAGE="TMB")
-        }
-        if (trace && i==maxit)
-            warning("Failed convergence with mgc=", mgc)
-        x
+    if (trace && i == maxit) {
+      warning("Failed convergence with mgc=", mgc)
     }
+    x
+  }
 }
 
 ## Test for invalid external pointer
 isNullPointer <- function(pointer) {
-  .Call("isNullPointer", pointer, PACKAGE="TMB")
+  .Call("isNullPointer", pointer, PACKAGE = "TMB")
 }
 
 ## Add external pointer finalizer
 registerFinalizer <- function(ADFun, DLL) {
-    if (is.null(ADFun)) return (NULL) ## ADFun=NULL used by sdreport
-    ADFun$DLL <- DLL
-    finalizer <- function(ptr) {
-        if ( ! isNullPointer(ptr) ) {
-            .Call("FreeADFunObject", ptr, PACKAGE=DLL)
-        } else {
-            ## Nothing to free
-        }
+  if (is.null(ADFun)) {
+    return(NULL)
+  } ## ADFun=NULL used by sdreport
+  ADFun$DLL <- DLL
+  finalizer <- function(ptr) {
+    if (!isNullPointer(ptr)) {
+      .Call("FreeADFunObject", ptr, PACKAGE = DLL)
+    } else {
+      ## Nothing to free
     }
-    reg.finalizer(ADFun$ptr, finalizer)
-    ADFun
+  }
+  reg.finalizer(ADFun$ptr, finalizer)
+  ADFun
 }
 
 ##' Sequential reduction configuration
@@ -149,17 +153,19 @@ registerFinalizer <- function(ADFun, DLL) {
 ##' \code{integrate} to \code{MakeADFun}.
 ##' @param x Breaks defining the domain of integration
 ##' @param discrete Boolean defining integration wrt Lebesgue measure (\code{discrete=FALSE}) or counting measure \code{discrete=TRUE}.
-SR <- function(x, discrete=FALSE) {
-    if (is(x, "SR")) return (x)
-    x <- as.numeric(x)
-    if (is.unsorted(x)) stop("'x' must be sorted")
-    if (discrete) {
-        w <- rep(1., length(x))
-    } else {
-        w <- diff(x)
-        x <- head(x, -1) + w / 2
-    }
-    structure(list(x=x, w=w, method="marginal_sr"), class="SR")
+SR <- function(x, discrete = FALSE) {
+  if (is(x, "SR")) {
+    return(x)
+  }
+  x <- as.numeric(x)
+  if (is.unsorted(x)) stop("'x' must be sorted")
+  if (discrete) {
+    w <- rep(1., length(x))
+  } else {
+    w <- diff(x)
+    x <- head(x, -1) + w / 2
+  }
+  structure(list(x = x, w = w, method = "marginal_sr"), class = "SR")
 }
 
 ##' Gauss Kronrod configuration
@@ -169,26 +175,26 @@ SR <- function(x, discrete=FALSE) {
 ##' \code{MakeADFun}.
 ##' @param ... See source code
 GK <- function(...) {
-    ans <- list(dim=1, adaptive=FALSE, debug=FALSE)
-    args <- list(...)
-    ans[names(args)] <- args
-    ans$method <- "marginal_gk"
-    class(ans) <- "GK"
-    ans
+  ans <- list(dim = 1, adaptive = FALSE, debug = FALSE)
+  args <- list(...)
+  ans[names(args)] <- args
+  ans$method <- "marginal_gk"
+  class(ans) <- "GK"
+  ans
 }
 
 ## TODO: Laplace approx config
 LA <- function(...) {
-    ans <- list(...)
-    ans$method <- "laplace"
-    class(ans) <- "LA"
-    ans
+  ans <- list(...)
+  ans$method <- "laplace"
+  class(ans) <- "LA"
+  ans
 }
 
 ## 'parse' MakeADFun argument 'integrate'
 parseIntegrate <- function(arg, name) {
-    i <- sapply(arg, function(x) is(x, name))
-    arg[i]
+  i <- sapply(arg, function(x) is(x, name))
+  arg[i]
 }
 
 ##' Construct objective functions with derivatives based on the users C++ template.
@@ -289,160 +295,166 @@ parseIntegrate <- function(arg, name) {
 ##' @param integrate Specify alternative integration method(s) for random effects (see details)
 ##' @param ... Currently unused.
 ##' @return List with components (fn, gr, etc) suitable for calling an R optimizer, such as \code{nlminb} or \code{optim}.
-MakeADFun <- function(data, parameters, map=list(),
-                      type=c("ADFun","Fun","ADGrad"[!intern && (!is.null(random) || !is.null(profile)) ] ),
-                      random=NULL,
-                      profile=NULL,
-                      random.start=expression(last.par.best[random]),
-                      hessian=FALSE,method="BFGS",
-                      inner.method="newton",
-                      inner.control=list(maxit=1000),
-                      MCcontrol=list(doMC=FALSE,seed=123,n=100),
-                      ADreport=FALSE,
-                      atomic=TRUE,
-                      LaplaceNonZeroGradient=FALSE, ## Experimental feature: Allow expansion around non-stationary point
-                      DLL=getUserDLL(),
-                      checkParameterOrder=TRUE, ## Optional check
-                      regexp=FALSE,
-                      silent=FALSE,
-                      intern=FALSE,
-                      integrate=NULL,
-                      ...){
+MakeADFun <- function(data, parameters, map = list(),
+                      type = c("ADFun", "Fun", "ADGrad"[!intern && (!is.null(random) || !is.null(profile))]),
+                      random = NULL,
+                      profile = NULL,
+                      random.start = expression(last.par.best[random]),
+                      hessian = FALSE, method = "BFGS",
+                      inner.method = "newton",
+                      inner.control = list(maxit = 1000),
+                      MCcontrol = list(doMC = FALSE, seed = 123, n = 100),
+                      ADreport = FALSE,
+                      atomic = TRUE,
+                      LaplaceNonZeroGradient = FALSE, ## Experimental feature: Allow expansion around non-stationary point
+                      DLL = getUserDLL(),
+                      checkParameterOrder = TRUE, ## Optional check
+                      regexp = FALSE,
+                      silent = FALSE,
+                      intern = FALSE,
+                      integrate = NULL,
+                      ...) {
   ## Check that DLL is loaded
-  if ( ! DLL %in% names(getLoadedDLLs()) ) {
+  if (!DLL %in% names(getLoadedDLLs())) {
     stop(sprintf("'%s' was not found in the list of loaded DLLs. Forgot to dyn.load(dynlib('%s')) ?", DLL, DLL))
   }
   env <- environment() ## This environment
-  if(!is.list(data))
+  if (!is.list(data)) {
     stop("'data' must be a list")
-  ok <- function(x)(is.matrix(x)|is.vector(x)|is.array(x))&(is.numeric(x)|is.logical(x))
-  ok.data <- function(x)ok(x)|is.factor(x)|is(x,"sparseMatrix")|is.list(x)|(is.character(x)&length(x)==1)
-  check.passed <- function(x){
-    y <- attr(x,"check.passed")
-    if(is.null(y)) FALSE else y
   }
-  if(!check.passed(data)){
-    if(!all(sapply(data,ok.data))){
+  ok <- function(x) (is.matrix(x) | is.vector(x) | is.array(x)) & (is.numeric(x) | is.logical(x))
+  ok.data <- function(x) ok(x) | is.factor(x) | is(x, "sparseMatrix") | is.list(x) | (is.character(x) & length(x) == 1)
+  check.passed <- function(x) {
+    y <- attr(x, "check.passed")
+    if (is.null(y)) FALSE else y
+  }
+  if (!check.passed(data)) {
+    if (!all(sapply(data, ok.data))) {
       cat("Problem with these data entries:\n")
-      print(which(!sapply(data,ok.data)))
-      stop("Only numeric matrices, vectors, arrays, ",
-           "factors, lists or length-1-characters ",
-           "can be interfaced")
+      print(which(!sapply(data, ok.data)))
+      stop(
+        "Only numeric matrices, vectors, arrays, ",
+        "factors, lists or length-1-characters ",
+        "can be interfaced"
+      )
     }
   }
-  if(!check.passed(parameters)){
-    if(!all(sapply(parameters,ok))){
+  if (!check.passed(parameters)) {
+    if (!all(sapply(parameters, ok))) {
       cat("Problem with these parameter entries:\n")
-      print(which(!sapply(parameters,ok)))
-      stop("Only numeric matrices, vectors and arrays ",
-           "can be interfaced")
+      print(which(!sapply(parameters, ok)))
+      stop(
+        "Only numeric matrices, vectors and arrays ",
+        "can be interfaced"
+      )
     }
   }
-  if(length(data)){
-    dataSanitize <- function(x){
-      if(is.list(x)) return( lapply(x, dataSanitize) )
-      if(is(x,"sparseMatrix")){
+  if (length(data)) {
+    dataSanitize <- function(x) {
+      if (is.list(x)) {
+        return(lapply(x, dataSanitize))
+      }
+      if (is(x, "sparseMatrix")) {
         ## WAS: x <- as(x, "dgTMatrix")
-        x <- as( as(x, "TsparseMatrix"), "generalMatrix")
-      }
-      else if (is.character(x))
-      {
+        x <- as(as(x, "TsparseMatrix"), "generalMatrix")
+      } else if (is.character(x)) {
         ## Do nothing
-      }
-      else
-      {
-        if(is.factor(x))x <- unclass(x)-1L ## Factors are passed as 0-based integers !!!
+      } else {
+        if (is.factor(x)) x <- unclass(x) - 1L ## Factors are passed as 0-based integers !!!
         storage.mode(x) <- "double"
       }
       x
     }
-    if(!check.passed(data)){
-      data <- lapply(data,dataSanitize)
+    if (!check.passed(data)) {
+      data <- lapply(data, dataSanitize)
     }
-    attr(data,"check.passed") <- TRUE
+    attr(data, "check.passed") <- TRUE
   }
-  if(length(parameters)){
-    parameterSanitize <- function(x){
+  if (length(parameters)) {
+    parameterSanitize <- function(x) {
       storage.mode(x) <- "double"
       x
     }
-    if(!check.passed(parameters)){
-      parameters <- lapply(parameters,parameterSanitize)
+    if (!check.passed(parameters)) {
+      parameters <- lapply(parameters, parameterSanitize)
     }
-    attr(parameters,"check.passed") <- TRUE
+    attr(parameters, "check.passed") <- TRUE
   }
 
-  if(checkParameterOrder){
+  if (checkParameterOrder) {
     ## For safety, check that parameter order match the parameter order in user template.
     ## If not, permute parameter list with a warning.
     ## Order in which parameters were requested:
-    parNameOrder <- getParameterOrder(data, parameters, new.env(), DLL=DLL)
-    if(!identical(names(parameters),parNameOrder)){
-      if(!silent) cat("Order of parameters:\n")
-      if(!silent) print(names(parameters))
-      if(!silent) cat("Not matching template order:\n")
-      if(!silent) print(parNameOrder)
-      keepAttrib( parameters ) <- parameters[parNameOrder]
-      if(!silent) cat("Your parameter list has been re-ordered.\n(Disable this warning with checkParameterOrder=FALSE)\n")
+    parNameOrder <- getParameterOrder(data, parameters, new.env(), DLL = DLL)
+    if (!identical(names(parameters), parNameOrder)) {
+      if (!silent) cat("Order of parameters:\n")
+      if (!silent) print(names(parameters))
+      if (!silent) cat("Not matching template order:\n")
+      if (!silent) print(parNameOrder)
+      keepAttrib(parameters) <- parameters[parNameOrder]
+      if (!silent) cat("Your parameter list has been re-ordered.\n(Disable this warning with checkParameterOrder=FALSE)\n")
     }
   }
-  
+
   ## Prepare parameter mapping.
   ## * A parameter map is a factor telling which parameters should be grouped
   ## * NA values are untouched: So user can e.g. set them to zero
   ## * NOTE: CURRENTLY ONLY WORKS ON PARAMETER_ARRAY() !!!
-  if(length(map)>0){
-    ok <- all(names(map)%in%names(parameters))
-    if(!ok)stop("Names in map must correspond to parameter names")
-    ok <- all(sapply(map,is.factor))
-    if(!ok)stop("map must contain factors")
-    ok <- sapply(parameters[names(map)],length)==sapply(map,length)
-    if(!all(ok))stop("A map factor length must equal parameter length")
-    param.map <- lapply(names(map),
-                        function(nam)
-                        {
-                            updateMap(parameters[[nam]], map[[nam]])
-                        })
+  if (length(map) > 0) {
+    ok <- all(names(map) %in% names(parameters))
+    if (!ok) stop("Names in map must correspond to parameter names")
+    ok <- all(sapply(map, is.factor))
+    if (!ok) stop("map must contain factors")
+    ok <- sapply(parameters[names(map)], length) == sapply(map, length)
+    if (!all(ok)) stop("A map factor length must equal parameter length")
+    param.map <- lapply(
+      names(map),
+      function(nam) {
+        updateMap(parameters[[nam]], map[[nam]])
+      }
+    )
     ## Now do the change:
-    keepAttrib( parameters[names(map)] ) <- param.map
+    keepAttrib(parameters[names(map)]) <- param.map
   }
 
   lrandom <- function() {
-      ans <- logical(length(par))
-      ans[random] <- TRUE
-      ans
+    ans <- logical(length(par))
+    ans[random] <- TRUE
+    ans
   }
   lfixed <- function() {
-      !lrandom()
+    !lrandom()
   }
   ## Utility to get back parameter list in original shape
-  parList <- function(x=par[lfixed()],par=last.par){
+  parList <- function(x = par[lfixed()], par = last.par) {
     ans <- parameters
-    nonemp <- sapply(ans,function(x)length(x)>0) ## Workaround utils::relist bug for empty list items
+    nonemp <- sapply(ans, function(x) length(x) > 0) ## Workaround utils::relist bug for empty list items
     nonempindex <- which(nonemp)
     skeleton <- as.relistable(ans[nonemp])
     par[lfixed()] <- x
-    li <- relist(par,skeleton)
-    reshape <- function(x){
-      if(is.null(attr(x,"map")))return(x)
-      y <- attr(x,"shape")
-      f <- attr(x,"map")
-      i <- which(f>=0)
-      y[i] <- x[f[i]+1]
+    li <- relist(par, skeleton)
+    reshape <- function(x) {
+      if (is.null(attr(x, "map"))) {
+        return(x)
+      }
+      y <- attr(x, "shape")
+      f <- attr(x, "map")
+      i <- which(f >= 0)
+      y[i] <- x[f[i] + 1]
       y
     }
-    for(i in seq(skeleton)){
+    for (i in seq(skeleton)) {
       ans[[nonempindex[i]]][] <- as.vector(li[[i]])
     }
     ## MM:   ans[] <- lapply(ans, reshape)  # _____________________
-    for(i in seq(ans)){
+    for (i in seq(ans)) {
       ans[[i]] <- reshape(ans[[i]])
     }
     ans
   }
 
   type <- match.arg(type, eval(type), several.ok = TRUE)
-  #if("ADFun"%in%type)ptrADFun <- .Call("MakeADFunObject",data,parameters) else ptrADFun <- NULL
+  # if("ADFun"%in%type)ptrADFun <- .Call("MakeADFunObject",data,parameters) else ptrADFun <- NULL
 
   reportenv <- new.env()
   par <- NULL
@@ -452,7 +464,7 @@ MakeADFun <- function(data, parameters, map=list(),
   Fun <- NULL
   ADGrad <- NULL
   tracepar <- FALSE
-  validpar <- function(x)TRUE
+  validpar <- function(x) TRUE
   tracemgc <- TRUE
   iterative.refinement <- FALSE
 
@@ -460,320 +472,348 @@ MakeADFun <- function(data, parameters, map=list(),
   L.created.by.newton <- skipFixedEffects <- spHess <- altHess <- NULL
 
   ## Disable all tracing information
-  beSilent <- function(){
-      tracemgc <<- FALSE
-      inner.control$trace <<- FALSE
-      silent <<- TRUE
-      cf <- config(DLL=DLL)
-      i <- grep("^trace.",names(cf))
-      cf[i] <- 0
-      cf$DLL <- DLL
-      do.call(config, cf)
-      NULL
+  beSilent <- function() {
+    tracemgc <<- FALSE
+    inner.control$trace <<- FALSE
+    silent <<- TRUE
+    cf <- config(DLL = DLL)
+    i <- grep("^trace.", names(cf))
+    cf[i] <- 0
+    cf$DLL <- DLL
+    do.call(config, cf)
+    NULL
   }
-  if(silent)beSilent()
+  if (silent) beSilent()
 
   ## Getting shape of ad reported variables
   ADreportDims <- NULL
+  uncertaintyInfo <- NULL
   ADreportIndex <- function() {
-      lngt <- sapply(ADreportDims, prod)
-      offset <- head( cumsum( c(1, lngt) ) , -1)
-      ans <- lapply(seq_along(lngt),
-                    function(i) array(seq(from = offset[i],
-                                          length.out = lngt[i]),
-                                      ADreportDims[[i]] ))
-      names(ans) <- names(ADreportDims)
-      ans
+    lngt <- sapply(ADreportDims, prod)
+    offset <- head(cumsum(c(1, lngt)), -1)
+    ans <- lapply(
+      seq_along(lngt),
+      function(i) {
+        array(
+          seq(
+            from = offset[i],
+            length.out = lngt[i]
+          ),
+          ADreportDims[[i]]
+        )
+      }
+    )
+    names(ans) <- names(ADreportDims)
+    ans
   }
+  uncertaintyIndex <- function() uncertaintyInfo
 
   ## All external pointers are created in function "retape" and can be re-created
   ## by running retape() if e.g. the number of openmp threads is changed.
   ## set.defaults: reset internal parameters to their default values.
   .random <- random
-  retape <- function(set.defaults = TRUE){
-    omp <- config(DLL=DLL) ## Get current OpenMP configuration
+  retape <- function(set.defaults = TRUE) {
+    omp <- config(DLL = DLL) ## Get current OpenMP configuration
     random <<- .random ## Restore original 'random' argument
-    if(atomic){ ## FIXME: Then no reason to create ptrFun again later ?
+    if (atomic) { ## FIXME: Then no reason to create ptrFun again later ?
       ## User template contains atomic functions ==>
       ## Have to call "double-template" to trigger tape generation
-      Fun <<- MakeDoubleFunObject(data, parameters, reportenv, DLL=DLL)
+      Fun <<- MakeDoubleFunObject(data, parameters, reportenv, DLL = DLL)
       ## Hack: unlist(parameters) only guarantied to be a permutation of the parameter vecter.
       out <- EvalDoubleFunObject(Fun, unlist(parameters), get_reportdims = TRUE)
       ADreportDims <<- attr(out, "reportdims")
+      uncertaintyInfo <<- attr(out, "uncertaintyinfo")
     }
-    if(is.character(profile)){
-        random <<- c(random, profile)
+    if (is.character(profile)) {
+      random <<- c(random, profile)
     }
-    if(is.character(random)){
-      if(!regexp){ ## Default: do exact match
-        if(!all(random %in% names(parameters))){
+    if (is.character(random)) {
+      if (!regexp) { ## Default: do exact match
+        if (!all(random %in% names(parameters))) {
           cat("Some 'random' effect names does not match 'parameter' list:\n")
-          print(setdiff(random,names(parameters)))
+          print(setdiff(random, names(parameters)))
           cat("(Note that regular expression match is disabled by default)\n")
           stop()
         }
-        if(any(duplicated(random))){
+        if (any(duplicated(random))) {
           cat("Duplicates in 'random' - will be removed\n")
           random <<- unique(random)
         }
-        tmp <- lapply(parameters,function(x)x*0)
-        tmp[random] <- lapply(tmp[random],function(x)x*0+1)
+        tmp <- lapply(parameters, function(x) x * 0)
+        tmp[random] <- lapply(tmp[random], function(x) x * 0 + 1)
         random <<- which(as.logical(unlist(tmp)))
-        if(length(random)==0) random <<- NULL
+        if (length(random) == 0) random <<- NULL
       }
-      if(regexp){ ## Original regular expression match
-        random <<- grepRandomParameters(parameters,random)
-        if(length(random)==0){
+      if (regexp) { ## Original regular expression match
+        random <<- grepRandomParameters(parameters, random)
+        if (length(random) == 0) {
           cat("Selected random effects did not match any model parameters.\n")
           random <<- NULL
         }
       }
-      if(is.character(profile)){
-          ## Convert 'profile' to a pointer into random (represented
-          ## as logical index vector):
-          tmp <- lapply(parameters,function(x)x*0)
-          tmp[profile] <- lapply(tmp[profile],function(x)x*0+1)
-          profile <<- match( which(as.logical(unlist(tmp))) , random )
-          if(length(profile)==0) random <<- NULL
-          if(any(duplicated(profile))) stop("Profile parameter vector not unique.")
-          tmp <- rep(0L, length(random))
-          tmp[profile] <- 1L
-          profile <<- tmp
+      if (is.character(profile)) {
+        ## Convert 'profile' to a pointer into random (represented
+        ## as logical index vector):
+        tmp <- lapply(parameters, function(x) x * 0)
+        tmp[profile] <- lapply(tmp[profile], function(x) x * 0 + 1)
+        profile <<- match(which(as.logical(unlist(tmp))), random)
+        if (length(profile) == 0) random <<- NULL
+        if (any(duplicated(profile))) stop("Profile parameter vector not unique.")
+        tmp <- rep(0L, length(random))
+        tmp[profile] <- 1L
+        profile <<- tmp
       }
       if (set.defaults) {
-          par <<- unlist(parameters)
+        par <<- unlist(parameters)
       }
     }
-    if("ADFun"%in%type){
+    if ("ADFun" %in% type) {
       ## autopar? => Tape with single thread
-      if (omp$autopar)
-          openmp(1, DLL=DLL)
-      ADFun <<- MakeADFunObject(data, parameters, reportenv, ADreport=ADreport, DLL=DLL)
+      if (omp$autopar) {
+        openmp(1, DLL = DLL)
+      }
+      ADFun <<- MakeADFunObject(data, parameters, reportenv, ADreport = ADreport, DLL = DLL)
       ## autopar? => Restore OpenMP number of threads
-      if (omp$autopar)
-          openmp(omp$nthreads, DLL=DLL)
+      if (omp$autopar) {
+        openmp(omp$nthreads, DLL = DLL)
+      }
       if (!is.null(integrate)) {
-          nm <- sapply(parameters, length)
-          nmpar <- rep(names(nm), nm)
-          for (i in seq_along(integrate)) {
-              I <- integrate[i]
-              ## Special case: joint integration list
-              if (is.null(names(I)) || names(I) == "") {
-                  I <- I[[1]]
-              }
-              ok <- all(names(I) %in% nmpar[random])
-              if (!ok)
-                  stop("Names to be 'integrate'd must be among the random parameters")
-              w <- which(nmpar[random] %in% names(I))
-              ## Argument 'which' is common to all methods
-              arg_which <- I[[1]]$which
-              if ( ! is.null(arg_which) )
-                  w <- w[arg_which]
-              method <- sapply(I, function(x) x$method)
-              ok <- all(duplicated(method)[-1])
-              if (!ok)
-                  stop("Grouping only allowed for identical methods")
-              method <- method[1]
-              cfg <- NULL
-              if (method == "marginal_sr") {
-                  ## SR has special support for joint integration
-                  fac <- factor(nmpar[random[w]],
-                                levels=names(I))
-                  cfg <- list(
-                      grid = I,
-                      random2grid = fac
-                  )
-              } else {
-                  ## For other methods we use the first
-                  ## (FIXME: Test no contradicting choices)
-                  cfg <- I[[1]]
-              }
-              stopifnot (is.list(cfg))
-              ## Integrate parameter subset out of the likelihood
-              TransformADFunObject(ADFun,
-                                   method = method,
-                                   random_order = random[w],
-                                   config = cfg,
-                                   mustWork = 1L)
-              ## Find out what variables have been integrated
-              ## (only GK might not integrate all random[w])
-              activeDomain <- as.logical(info(ADFun)$activeDomain)
-              random_remove <- random[w][!activeDomain[random[w]]]
-              ## Integrated parameters must no longer be present
-              TransformADFunObject(ADFun,
-                                   method="remove_random_parameters",
-                                   random_order = random_remove,
-                                   mustWork = 1L)
-              ## Adjust 'random' and 'par' accordingly
-              attr(ADFun$ptr, "par") <- attr(ADFun$ptr, "par")[-random_remove]
-              par_mask <- rep(FALSE, length(attr(ADFun$ptr, "par")))
-              par_mask[random] <- TRUE
-              par <<- par[-random_remove]
-              nmpar <- nmpar[-random_remove]
-              par_mask <- par_mask[-random_remove]
-              random <<- which(par_mask)
-              if (length(random) == 0) {
-                  random <<- NULL
-                  type <<- setdiff(type, "ADGrad")
-              }
-              ## Run tape optimizer
-              if (config(DLL=DLL)$optimize.instantly) {
-                  TransformADFunObject(ADFun,
-                                       method = "optimize",
-                                       mustWork = 1L)
-              }
+        nm <- sapply(parameters, length)
+        nmpar <- rep(names(nm), nm)
+        for (i in seq_along(integrate)) {
+          I <- integrate[i]
+          ## Special case: joint integration list
+          if (is.null(names(I)) || names(I) == "") {
+            I <- I[[1]]
           }
+          ok <- all(names(I) %in% nmpar[random])
+          if (!ok) {
+            stop("Names to be 'integrate'd must be among the random parameters")
+          }
+          w <- which(nmpar[random] %in% names(I))
+          ## Argument 'which' is common to all methods
+          arg_which <- I[[1]]$which
+          if (!is.null(arg_which)) {
+            w <- w[arg_which]
+          }
+          method <- sapply(I, function(x) x$method)
+          ok <- all(duplicated(method)[-1])
+          if (!ok) {
+            stop("Grouping only allowed for identical methods")
+          }
+          method <- method[1]
+          cfg <- NULL
+          if (method == "marginal_sr") {
+            ## SR has special support for joint integration
+            fac <- factor(nmpar[random[w]],
+              levels = names(I)
+            )
+            cfg <- list(
+              grid = I,
+              random2grid = fac
+            )
+          } else {
+            ## For other methods we use the first
+            ## (FIXME: Test no contradicting choices)
+            cfg <- I[[1]]
+          }
+          stopifnot(is.list(cfg))
+          ## Integrate parameter subset out of the likelihood
+          TransformADFunObject(ADFun,
+            method = method,
+            random_order = random[w],
+            config = cfg,
+            mustWork = 1L
+          )
+          ## Find out what variables have been integrated
+          ## (only GK might not integrate all random[w])
+          activeDomain <- as.logical(info(ADFun)$activeDomain)
+          random_remove <- random[w][!activeDomain[random[w]]]
+          ## Integrated parameters must no longer be present
+          TransformADFunObject(ADFun,
+            method = "remove_random_parameters",
+            random_order = random_remove,
+            mustWork = 1L
+          )
+          ## Adjust 'random' and 'par' accordingly
+          attr(ADFun$ptr, "par") <- attr(ADFun$ptr, "par")[-random_remove]
+          par_mask <- rep(FALSE, length(attr(ADFun$ptr, "par")))
+          par_mask[random] <- TRUE
+          par <<- par[-random_remove]
+          nmpar <- nmpar[-random_remove]
+          par_mask <- par_mask[-random_remove]
+          random <<- which(par_mask)
+          if (length(random) == 0) {
+            random <<- NULL
+            type <<- setdiff(type, "ADGrad")
+          }
+          ## Run tape optimizer
+          if (config(DLL = DLL)$optimize.instantly) {
+            TransformADFunObject(ADFun,
+              method = "optimize",
+              mustWork = 1L
+            )
+          }
+        }
       }
       if (intern) {
-          cfg <- inner.control
-          if (is.null(cfg$sparse)) cfg$sparse <- TRUE
-          cfg <- lapply(cfg, as.double)
+        cfg <- inner.control
+        if (is.null(cfg$sparse)) cfg$sparse <- TRUE
+        cfg <- lapply(cfg, as.double)
+        TransformADFunObject(ADFun,
+          method = "laplace",
+          config = cfg,
+          random_order = random,
+          mustWork = 1L
+        )
+        TransformADFunObject(ADFun,
+          method = "remove_random_parameters",
+          random_order = random,
+          mustWork = 1L
+        )
+        ## FIXME: Should be done by above .Call
+        attr(ADFun$ptr, "par") <- attr(ADFun$ptr, "par")[-random]
+        ##
+        par <<- par[-random]
+        random <<- NULL
+        ## Run tape optimizer
+        if (config(DLL = DLL)$optimize.instantly) {
           TransformADFunObject(ADFun,
-                               method = "laplace",
-                               config = cfg,
-                               random_order = random,
-                               mustWork = 1L)
-          TransformADFunObject(ADFun,
-                               method="remove_random_parameters",
-                               random_order = random,
-                               mustWork = 1L)
-          ## FIXME: Should be done by above .Call
-          attr(ADFun$ptr,"par") <- attr(ADFun$ptr,"par")[-random]
-          ##
-          par <<- par[-random]
-          random <<- NULL
-          ## Run tape optimizer
-          if (config(DLL=DLL)$optimize.instantly) {
-              TransformADFunObject(ADFun,
-                                   method = "optimize",
-                                   mustWork = 1L)
-          }
+            method = "optimize",
+            mustWork = 1L
+          )
+        }
       }
       if (set.defaults) {
-          par <<- attr(ADFun$ptr,"par")
-          last.par <<- par
-          last.par1 <<- par
-          last.par2 <<- par
-          last.par.best <<- par
-          value.best <<- Inf
+        par <<- attr(ADFun$ptr, "par")
+        last.par <<- par
+        last.par1 <<- par
+        last.par2 <<- par
+        last.par.best <<- par
+        value.best <<- Inf
       }
     }
     if (omp$autopar && !ADreport) {
-        ## Experiment !
-        TransformADFunObject(ADFun,
-                             method = "parallel_accumulate",
-                             num_threads = as.integer(openmp(DLL=DLL)),
-                             mustWork = 0L)
+      ## Experiment !
+      TransformADFunObject(ADFun,
+        method = "parallel_accumulate",
+        num_threads = as.integer(openmp(DLL = DLL)),
+        mustWork = 0L
+      )
     }
     if (length(random) > 0) {
-        ## Experiment !
-        TransformADFunObject(ADFun,
-                             method = "reorder_random",
-                             random_order = random,
-                             mustWork = 0L)
+      ## Experiment !
+      TransformADFunObject(ADFun,
+        method = "reorder_random",
+        random_order = random,
+        mustWork = 0L
+      )
     }
-    if("Fun"%in%type) {
-        Fun <<- MakeDoubleFunObject(data, parameters, reportenv, DLL=DLL)
+    if ("Fun" %in% type) {
+      Fun <<- MakeDoubleFunObject(data, parameters, reportenv, DLL = DLL)
     }
-    if("ADGrad"%in%type) {
-        retape_adgrad(lazy = TRUE)
+    if ("ADGrad" %in% type) {
+      retape_adgrad(lazy = TRUE)
     }
     ## Skip fixed effects from the full hessian ?
     ## * Probably more efficient - especially in terms of memory.
     ## * Only possible if a taped gradient is available - see function "ff" below.
     env$skipFixedEffects <- !is.null(ADGrad)
-    delayedAssign("spHess", sparseHessianFun(env, skipFixedEffects=skipFixedEffects ),
-                  assign.env = env)
-  }## end{retape}
+    delayedAssign("spHess", sparseHessianFun(env, skipFixedEffects = skipFixedEffects),
+      assign.env = env
+    )
+  } ## end{retape}
   ## Lazy / Full adgrad ?
   retape_adgrad <- function(lazy = TRUE) {
-      ## * Use already taped function value f = ADFun$ptr
-      ## * In random effects case we only need the 'random' part of the gradient
-      if (!lazy) {
-        random <- NULL
-        EvalADFunObject(ADFun, par, set_tail=FALSE) ## Calls unset_tail()
-      }
-      ADGrad <<- MakeADGradObject(data, parameters, reportenv,
-                                  random=random, f=ADFun$ptr, DLL=DLL)
+    ## * Use already taped function value f = ADFun$ptr
+    ## * In random effects case we only need the 'random' part of the gradient
+    if (!lazy) {
+      random <- NULL
+      EvalADFunObject(ADFun, par, set_tail = FALSE) ## Calls unset_tail()
+    }
+    ADGrad <<- MakeADGradObject(data, parameters, reportenv,
+      random = random, f = ADFun$ptr, DLL = DLL
+    )
   }
   retape(set.defaults = TRUE)
   ## Has atomic functions been generated for the tapes ?
-  usingAtomics <- function().Call("usingAtomics", PACKAGE=DLL)
+  usingAtomics <- function() .Call("usingAtomics", PACKAGE = DLL)
 
   .data <- NULL
-  f <- function(theta=par, order=0, type="ADdouble",
-                cols=NULL, rows=NULL,
-                sparsitypattern=0, rangecomponent=1, rangeweight=NULL,
-                dumpstack=0, doforward=1, do_simulate=0, set_tail=0,
-                keepx=NULL, keepy=NULL) {
-    if(isNullPointer(ADFun$ptr)) {
-        if(silent)beSilent()
-        ## Loaded or deep copied object: Only restore external
-        ## pointers. Don't touch last.par/last.par.best etc:
-        retape(set.defaults = FALSE)
+  f <- function(theta = par, order = 0, type = "ADdouble",
+                cols = NULL, rows = NULL,
+                sparsitypattern = 0, rangecomponent = 1, rangeweight = NULL,
+                dumpstack = 0, doforward = 1, do_simulate = 0, set_tail = 0,
+                keepx = NULL, keepy = NULL) {
+    if (isNullPointer(ADFun$ptr)) {
+      if (silent) beSilent()
+      ## Loaded or deep copied object: Only restore external
+      ## pointers. Don't touch last.par/last.par.best etc:
+      retape(set.defaults = FALSE)
     }
     ## User has changed the data => Next forward pass must traverse whole graph !
     data_changed <- !identical(.data, data) ## Fast to check if identical (i.e. most of the time)
     if (data_changed) {
-        .data <<- data ## Shallow copy (fast)
+      .data <<- data ## Shallow copy (fast)
     }
     switch(type,
-           "ADdouble" = {
-          res <- EvalADFunObject(ADFun, theta,
-                                 order=order,
-                                 hessiancols=cols,
-                                 hessianrows=rows,
-                                 sparsitypattern=sparsitypattern,
-                                 rangecomponent=rangecomponent,
-                                 rangeweight=rangeweight,
-                                 dumpstack=dumpstack,
-                                 doforward=doforward,
-                                 set_tail=set_tail,
-                                 data_changed=data_changed)
-          last.par <<- theta
-          if(order==1)last.par1 <<- theta
-          if(order==2)last.par2 <<- theta
-        },
-
-        "double" = {
-          res <- EvalDoubleFunObject(Fun, theta, do_simulate=do_simulate)
-        },
-
-        "ADGrad" = {
-            res <- EvalADFunObject(ADGrad, theta,
-                                   order=order,
-                                   hessiancols=cols,
-                                   hessianrows=rows,
-                                   sparsitypattern=sparsitypattern,
-                                   rangecomponent=rangecomponent,
-                                   rangeweight=rangeweight,
-                                   dumpstack=dumpstack,
-                                   doforward=doforward,
-                                   set_tail=set_tail,
-                                   keepx=keepx,
-                                   keepy=keepy,
-                                   data_changed=data_changed)
-        },
-        stop("invalid 'type'")) # end{ switch() }
+      "ADdouble" = {
+        res <- EvalADFunObject(ADFun, theta,
+          order = order,
+          hessiancols = cols,
+          hessianrows = rows,
+          sparsitypattern = sparsitypattern,
+          rangecomponent = rangecomponent,
+          rangeweight = rangeweight,
+          dumpstack = dumpstack,
+          doforward = doforward,
+          set_tail = set_tail,
+          data_changed = data_changed
+        )
+        last.par <<- theta
+        if (order == 1) last.par1 <<- theta
+        if (order == 2) last.par2 <<- theta
+      },
+      "double" = {
+        res <- EvalDoubleFunObject(Fun, theta, do_simulate = do_simulate)
+      },
+      "ADGrad" = {
+        res <- EvalADFunObject(ADGrad, theta,
+          order = order,
+          hessiancols = cols,
+          hessianrows = rows,
+          sparsitypattern = sparsitypattern,
+          rangecomponent = rangecomponent,
+          rangeweight = rangeweight,
+          dumpstack = dumpstack,
+          doforward = doforward,
+          set_tail = set_tail,
+          keepx = keepx,
+          keepy = keepy,
+          data_changed = data_changed
+        )
+      },
+      stop("invalid 'type'")
+    ) # end{ switch() }
     res
   } ## end{ f }
 
-  h <- function(theta=par, order=0, hessian, L, ...) {
-    if(order == 0) {
-      ##logdetH <- determinant(hessian)$mod
-      logdetH <- 2*determinant(L, sqrt=TRUE)$modulus
-      ans <- f(theta,order=0) + .5*logdetH - length(random)/2*log(2*pi)
-      if(LaplaceNonZeroGradient){
-        grad <- f(theta,order=1)[random]
-        ans - .5* sum(grad * as.numeric( solveCholesky(L, grad) ))
-      } else
+  h <- function(theta = par, order = 0, hessian, L, ...) {
+    if (order == 0) {
+      ## logdetH <- determinant(hessian)$mod
+      logdetH <- 2 * determinant(L, sqrt = TRUE)$modulus
+      ans <- f(theta, order = 0) + .5 * logdetH - length(random) / 2 * log(2 * pi)
+      if (LaplaceNonZeroGradient) {
+        grad <- f(theta, order = 1)[random]
+        ans - .5 * sum(grad * as.numeric(solveCholesky(L, grad)))
+      } else {
         ans
-    }
-    else if(order == 1) {
-      if(LaplaceNonZeroGradient)stop("Not correct for LaplaceNonZeroGradient=TRUE")
-      ##browser()
+      }
+    } else if (order == 1) {
+      if (LaplaceNonZeroGradient) stop("Not correct for LaplaceNonZeroGradient=TRUE")
+      ## browser()
       e <- environment(spHess)
-      solveSubset <- function(L).Call("tmb_invQ",L,PACKAGE="TMB")
+      solveSubset <- function(L) .Call("tmb_invQ", L, PACKAGE = "TMB")
       ## FIXME: The following two lines are not efficient:
       ## 1. ihessian <- tril(solveSubset(L))
       ## 2. diag(ihessian) <- .5*diag(ihessian)
@@ -784,16 +824,16 @@ MakeADFun <- function(data, parameters, map=list(),
       ## FIXED! :
       ihessian <- solveSubset2(L)
       ## Profile case correction (1st order case only)
-      if(!is.null(profile)){
-          ## Naive way:
-          ##   ihessian[profile,] <- 0
-          ##   ihessian[,profile] <- 0
-          ## However, this would modify sparseness pattern and also not
-          ## account for 'ihessian' being permuted:
-          perm <- L@perm+1L
-          ihessian <- .Call("tmb_sparse_izamd", ihessian, profile[perm], 0.0, PACKAGE="TMB")
+      if (!is.null(profile)) {
+        ## Naive way:
+        ##   ihessian[profile,] <- 0
+        ##   ihessian[,profile] <- 0
+        ## However, this would modify sparseness pattern and also not
+        ## account for 'ihessian' being permuted:
+        perm <- L@perm + 1L
+        ihessian <- .Call("tmb_sparse_izamd", ihessian, profile[perm], 0.0, PACKAGE = "TMB")
       }
-      
+
       ## General function to lookup entries A subset B.
       ## lookup.old <- function(A,B){
       ##   A <- as(tril(A),"dtTMatrix")
@@ -802,80 +842,94 @@ MakeADFun <- function(data, parameters, map=list(),
       ## }
       ## General function to lookup entries A in B[r,r] assuming pattern of A
       ## is subset of pattern of B[r,r].
-      lookup <- function(A,B,r=NULL){
-        A <- tril(A); B <- tril(B)
-        B@x[] <- seq.int(length.out=length(B@x)) ## Pointers to full B matrix (Can have up to 2^31-1 non-zeros)
-        if(!is.null(r)){
-            ## Goal is to get:
-            ##     B <- forceSymmetric(B)
-            ##     B <- B[r,r,drop=FALSE]
-            ## However the internal Matrix code for
-            ## "B[r,r,drop=FALSE]" creates temporary "dgCMatrix"
-            ## thereby almost doubling the number of non-zeros. Need
-            ## solution that works with max (2^31-1) non-zeros:
-            B <- .Call("tmb_half_diag", B, PACKAGE="TMB")
-            B <- tril( B[r,r,drop=FALSE] ) + tril( t(B)[r,r,drop=FALSE] )
+      lookup <- function(A, B, r = NULL) {
+        A <- tril(A)
+        B <- tril(B)
+        B@x[] <- seq.int(length.out = length(B@x)) ## Pointers to full B matrix (Can have up to 2^31-1 non-zeros)
+        if (!is.null(r)) {
+          ## Goal is to get:
+          ##     B <- forceSymmetric(B)
+          ##     B <- B[r,r,drop=FALSE]
+          ## However the internal Matrix code for
+          ## "B[r,r,drop=FALSE]" creates temporary "dgCMatrix"
+          ## thereby almost doubling the number of non-zeros. Need
+          ## solution that works with max (2^31-1) non-zeros:
+          B <- .Call("tmb_half_diag", B, PACKAGE = "TMB")
+          B <- tril(B[r, r, drop = FALSE]) + tril(t(B)[r, r, drop = FALSE])
         }
-        m <- .Call("match_pattern", A, B, PACKAGE="TMB") ## Same length as A@x with pointers to B@x
+        m <- .Call("match_pattern", A, B, PACKAGE = "TMB") ## Same length as A@x with pointers to B@x
         B@x[m]
       }
-      if(is.null(e$ind1)){
+      if (is.null(e$ind1)) {
         ## hessian: Hessian of random effect part only.
         ## ihessian: Inverse subset of hessian (same dim but larger pattern!).
         ## Hfull: Pattern of full hessian including fixed effects.
         if (!silent) cat("Matching hessian patterns... ")
-        iperm <- invPerm(L@perm+1L)
-        e$ind1 <- lookup(hessian,ihessian,iperm) ## Same dimensions
-        e$ind2 <- lookup(hessian,e$Hfull,random)  ## Note: dim(Hfull)>dim(hessian) !
+        iperm <- invPerm(L@perm + 1L)
+        e$ind1 <- lookup(hessian, ihessian, iperm) ## Same dimensions
+        e$ind2 <- lookup(hessian, e$Hfull, random) ## Note: dim(Hfull)>dim(hessian) !
         if (!silent) cat("Done\n")
       }
-      w <- rep(0,length.out=length(e$Hfull@x))
+      w <- rep(0, length.out = length(e$Hfull@x))
       w[e$ind2] <- ihessian@x[e$ind1]
       ## Reverse mode evaluate ptr in rangedirection w
       ## now gives .5*tr(Hdot*Hinv) !!
       ## return
-      as.vector( f(theta,order=1) ) +
-          EvalADFunObject(e$ADHess, theta,
-                          order=1,
-                          rangeweight=w)
-    }## order == 1
-    else stop(sprintf("'order'=%d not yet implemented", order))
+      as.vector(f(theta, order = 1)) +
+        EvalADFunObject(e$ADHess, theta,
+          order = 1,
+          rangeweight = w
+        )
+    } ## order == 1
+    else {
+      stop(sprintf("'order'=%d not yet implemented", order))
+    }
   } ## end{ h }
 
-  ff <- function(par.fixed=par[-random], order=0, ...) {
+  ff <- function(par.fixed = par[-random], order = 0, ...) {
     names(par.fixed) <- names(par[-random])
-    f0 <- function(par.random,order=0,...){
+    f0 <- function(par.random, order = 0, ...) {
       par[random] <- par.random
       par[-random] <- par.fixed
-      res <- f(par,order=order,set_tail=random[1],...)
-      switch(order+1,res,res[random],res[random,random])
+      res <- f(par, order = order, set_tail = random[1], ...)
+      switch(order + 1,
+        res,
+        res[random],
+        res[random, random]
+      )
     }
     ## sparse hessian
-    H0 <- function(par.random){
+    H0 <- function(par.random) {
       par[random] <- par.random
       par[-random] <- par.fixed
-      #spHess(par)[random,random,drop=FALSE]
-      spHess(par,random=TRUE,set_tail=random[1])
+      # spHess(par)[random,random,drop=FALSE]
+      spHess(par, random = TRUE, set_tail = random[1])
     }
-    if(inner.method=="newton"){
-      #opt <- newton(eval(random.start),fn=f0,gr=function(x)f0(x,order=1),
+    if (inner.method == "newton") {
+      # opt <- newton(eval(random.start),fn=f0,gr=function(x)f0(x,order=1),
       #              he=function(x)f0(x,order=2))
-      opt <- try( do.call("newton",c(list(par=eval(random.start),
-                                      fn=f0,
-                                      gr=function(x)f0(x,order=1),
-                                      ##he=function(x)f0(x,order=2)),
-                                      he=H0,env=env),
-                                 inner.control)
-                          ), silent=silent
-                 )
+      opt <- try(do.call("newton", c(
+        list(
+          par = eval(random.start),
+          fn = f0,
+          gr = function(x) f0(x, order = 1),
+          ## he=function(x)f0(x,order=2)),
+          he = H0, env = env
+        ),
+        inner.control
+      )), silent = silent)
       if (inherits(opt, "try-error") || !is.finite(opt$value)) {
-        if (order==0) return(NaN)
-        if (order==1) stop("inner newton optimization failed during gradient calculation")
+        if (order == 0) {
+          return(NaN)
+        }
+        if (order == 1) stop("inner newton optimization failed during gradient calculation")
         stop("invalid 'order'")
       }
     } else {
-      opt <- optim(eval(random.start),fn=f0,gr=function(x)f0(x,order=1),
-                   method=inner.method,control=inner.control)
+      opt <- optim(eval(random.start),
+        fn = f0, gr = function(x) f0(x, order = 1),
+        method = inner.method, control = inner.control
+      )
     }
     par[random] <- opt$par
     par[-random] <- par.fixed
@@ -883,126 +937,133 @@ MakeADFun <- function(data, parameters, map=list(),
     ## Use alternative Hessian for log determinant?
     altHessFlag <- !is.null(altHess)
     if (altHessFlag) {
-        altHess(TRUE) ## Enable alternative hessian
-        on.exit(altHess(FALSE))
+      altHess(TRUE) ## Enable alternative hessian
+      on.exit(altHess(FALSE))
     }
 
     ## HERE! - update hessian and cholesky
-    if(!skipFixedEffects){ ## old way
+    if (!skipFixedEffects) { ## old way
       hess <- spHess(par) ## Full hessian
-      hessian <- hess[random,random] ## Subset
+      hessian <- hess[random, random] ## Subset
     } else {
-      hessian <- spHess(par,random=TRUE)
+      hessian <- spHess(par, random = TRUE)
     }
     ## Profile case correction (0 and 1st order)
-    if( !is.null(profile) ){
-        ## Naive way:
-        ##   hessian[profile, ] <- 0
-        ##   hessian[, profile] <- 0
-        ##   diag(hessian)[profile] <- 1
-        ## However, this would modify sparseness pattern:
-        hessian <- .Call("tmb_sparse_izamd", hessian, profile, 1.0, PACKAGE="TMB")
+    if (!is.null(profile)) {
+      ## Naive way:
+      ##   hessian[profile, ] <- 0
+      ##   hessian[, profile] <- 0
+      ##   diag(hessian)[profile] <- 1
+      ## However, this would modify sparseness pattern:
+      hessian <- .Call("tmb_sparse_izamd", hessian, profile, 1.0, PACKAGE = "TMB")
     }
     ## Update Cholesky:
-    if(!is.null(env$L.created.by.newton)){
+    if (!is.null(env$L.created.by.newton)) {
       L <- env$L.created.by.newton
-      ##.Call("destructive_CHM_update",L,hessian,as.double(0),PACKAGE="Matrix")
-      updateCholesky(L,hessian)
-    } else
-      L <- Cholesky(hessian,perm=TRUE,LDL=FALSE,super=TRUE)
+      ## .Call("destructive_CHM_update",L,hessian,as.double(0),PACKAGE="Matrix")
+      updateCholesky(L, hessian)
+    } else {
+      L <- Cholesky(hessian, perm = TRUE, LDL = FALSE, super = TRUE)
+    }
 
-    if(order==0){
-      res <- h(par,order=0,hessian=hessian,L=L)
+    if (order == 0) {
+      res <- h(par, order = 0, hessian = hessian, L = L)
       ## Profile case correction
-      if(!is.null(profile)){
-          res <- res + sum(profile)/2*log(2*pi)
+      if (!is.null(profile)) {
+        res <- res + sum(profile) / 2 * log(2 * pi)
       }
-      if(is.finite(res)){
-        if(res<value.best){
-          last.par.best <<- par; value.best <<- res
+      if (is.finite(res)) {
+        if (res < value.best) {
+          last.par.best <<- par
+          value.best <<- res
         }
       }
     }
-    if(order==1){
+    if (order == 1) {
       if (iterative.refinement && is.null(attr(L, "iterative_refinement"))) {
-        attr(L, "iterative_refinement") <- iterativeRefine(list(env=env))
+        attr(L, "iterative_refinement") <- iterativeRefine(list(env = env))
       }
-      #hess <- f(par,order=2,cols=random)
-      #hess <- spHess(par)##[,random,drop=FALSE]
-      grad <- h(par,order=1,hessian=hessian,L=L)
-      #res <- grad[-random] - t(grad[random])%*%solve(hess[random,random])%*%hess[random,-random]
-      #res <- grad[-random] - t(grad[random])%*%solve(hess[random,])%*%t(hess[-random,])
+      # hess <- f(par,order=2,cols=random)
+      # hess <- spHess(par)##[,random,drop=FALSE]
+      grad <- h(par, order = 1, hessian = hessian, L = L)
+      # res <- grad[-random] - t(grad[random])%*%solve(hess[random,random])%*%hess[random,-random]
+      # res <- grad[-random] - t(grad[random])%*%solve(hess[random,])%*%t(hess[-random,])
       if (altHessFlag) {
-          ## Restore original hessian and Cholesky
-          altHess(FALSE) ## Disable alternative hessian
-          hessian <- spHess(par, random=TRUE)
-          updateCholesky(L, hessian)
+        ## Restore original hessian and Cholesky
+        altHess(FALSE) ## Disable alternative hessian
+        hessian <- spHess(par, random = TRUE)
+        updateCholesky(L, hessian)
       }
       ## Profile case correction. The remaining calculations must be
       ## done with the original hessian (which has been destroyed)
-      if(!is.null(profile)){
-          ## Update hessian and Cholesky:
-          if(!skipFixedEffects){ ## old way
-              hess <- spHess(par) ## Full hessian
-              hessian <- hess[random,random] ## Subset
-          } else {
-              hessian <- spHess(par,random=TRUE)
-          }
-          updateCholesky(L,hessian)
+      if (!is.null(profile)) {
+        ## Update hessian and Cholesky:
+        if (!skipFixedEffects) { ## old way
+          hess <- spHess(par) ## Full hessian
+          hessian <- hess[random, random] ## Subset
+        } else {
+          hessian <- spHess(par, random = TRUE)
+        }
+        updateCholesky(L, hessian)
       }
-      
+
       ## res <- grad[-random] -
       ##   hess[-random,random]%*%as.vector(solve(hess[random,random],grad[random]))
 
-      if(!skipFixedEffects){
+      if (!skipFixedEffects) {
         ## Relies on "hess[-random,random]" !!!!!
         res <- grad[-random] -
-          hess[-random,random] %*% as.vector(solveCholesky(L,grad[random],iterative.refinement))
+          hess[-random, random] %*% as.vector(solveCholesky(L, grad[random], iterative.refinement))
       } else {
         ## Smarter: Do a reverse sweep of ptrADGrad
-        w <- rep(0,length(par))
-        w[random] <- as.vector(solveCholesky(L,grad[random],iterative.refinement))
+        w <- rep(0, length(par))
+        w[random] <- as.vector(solveCholesky(L, grad[random], iterative.refinement))
         res <- grad[-random] -
-          f(par, order=1, type="ADGrad", rangeweight=w)[-random]
+          f(par, order = 1, type = "ADGrad", rangeweight = w)[-random]
       }
 
       res <- drop(res)
     }
-    if(order == 2) {
-      n <- length(par); nr <- length(random); nf <- n-nr
-      fixed <- setdiff(1:n,random)
-      D1h <- h(par,order=1) ## 1*n
-      D2h <- h(par,order=2) ## n*n
-      D2f <- f(par,order=2,cols=random) ## n*nr
-      D3f <- sapply(random,function(i)
-                    f(par,type="ADGrad",
-                      order=2,rangecomponent=i))  ## n^2 * nr
-      I.D2f <- solve(D2f[random,])
-      D1eta <- -t(D2f[-random,] %*% I.D2f) ## nr*nf
-      D3f.D1eta <- D3f%*%D1eta ## n^2 * nf
-      dim(D3f.D1eta) <- c(n,n,nf)
-      dim(D3f) <- c(n,n,nr)
-      D3f.fixed <- D3f[fixed,,] ##nf*n*nr
+    if (order == 2) {
+      n <- length(par)
+      nr <- length(random)
+      nf <- n - nr
+      fixed <- setdiff(1:n, random)
+      D1h <- h(par, order = 1) ## 1*n
+      D2h <- h(par, order = 2) ## n*n
+      D2f <- f(par, order = 2, cols = random) ## n*nr
+      D3f <- sapply(random, function(i) {
+        f(par,
+          type = "ADGrad",
+          order = 2, rangecomponent = i
+        )
+      }) ## n^2 * nr
+      I.D2f <- solve(D2f[random, ])
+      D1eta <- -t(D2f[-random, ] %*% I.D2f) ## nr*nf
+      D3f.D1eta <- D3f %*% D1eta ## n^2 * nf
+      dim(D3f.D1eta) <- c(n, n, nf)
+      dim(D3f) <- c(n, n, nr)
+      D3f.fixed <- D3f[fixed, , ] ## nf*n*nr
       D2eta <- sapply(1:nf, function(i) {
-        -I.D2f %*% (t(D3f.fixed[i,fixed,]) + D3f.D1eta[random,fixed, i] +
-                    ( D3f.fixed[i,random,] + D3f.D1eta[random,random,i] ) %*% D1eta )
+        -I.D2f %*% (t(D3f.fixed[i, fixed, ]) + D3f.D1eta[random, fixed, i] +
+          (D3f.fixed[i, random, ] + D3f.D1eta[random, random, i]) %*% D1eta)
       }) # nr*nf*nf
-      dim(D2eta) <- c(nr,nf,nf)
-      D2h.fixed <- D2h[fixed,] #nf*n
-      res <- sapply(1:nf,function(i){
-        D2h.fixed[i,fixed] + t( D2h.fixed[,random] %*% D1eta[,i] ) +
-          ( t(D2h.fixed[i,random]) +
-           t(D2h[random,random] %*% D1eta[,i]) ) %*% D1eta +
-             D1h[,random] %*% D2eta[,,i]
+      dim(D2eta) <- c(nr, nf, nf)
+      D2h.fixed <- D2h[fixed, ] # nf*n
+      res <- sapply(1:nf, function(i) {
+        D2h.fixed[i, fixed] + t(D2h.fixed[, random] %*% D1eta[, i]) +
+          (t(D2h.fixed[i, random]) +
+            t(D2h[random, random] %*% D1eta[, i])) %*% D1eta +
+          D1h[, random] %*% D2eta[, , i]
       })
-      attr(res,"D2eta") <- D2eta
-      attr(res,"D1eta") <- D1eta
-      #attr(res,"D1h") <- D1h
-      #attr(res,"D2h") <- D2h
-      #attr(res,"D2f") <- D2f
-      #attr(res,"D3f") <- D3f
+      attr(res, "D2eta") <- D2eta
+      attr(res, "D1eta") <- D1eta
+      # attr(res,"D1h") <- D1h
+      # attr(res,"D2h") <- D2h
+      # attr(res,"D2f") <- D2f
+      # attr(res,"D3f") <- D3f
     }
-    if(all(is.finite(res))) last.par.ok <<- par
+    if (all(is.finite(res))) last.par.ok <<- par
     res
   } ## end{ ff }
 
@@ -1014,159 +1075,182 @@ MakeADFun <- function(data, parameters, map=list(),
   ## * Eventually "par0" will stabilize and become independent of the fixed
   ##   effects "par", so that derivatives of the sample density and the samples
   ##   are zero wrt. the fixed effects.
-  MC <- function(par=last.par,       ## Point in which we are evaluating the likelihood
-                 par0=last.par.best, ## Parameter for proposal distribution
-                 n=100,              ## Number of samples
-                 order=0,            ## Derivative order
-                 seed=NULL,          ## Random seed
-                 antithetic=TRUE,    ## Reduce variance
-                 keep=FALSE,         ## Keep samples and fct evals
-                 phi=NULL,           ## Function to calculate mean of
-                 ...){
-    if(is.numeric(seed))set.seed(seed)
+  MC <- function(par = last.par, ## Point in which we are evaluating the likelihood
+                 par0 = last.par.best, ## Parameter for proposal distribution
+                 n = 100, ## Number of samples
+                 order = 0, ## Derivative order
+                 seed = NULL, ## Random seed
+                 antithetic = TRUE, ## Reduce variance
+                 keep = FALSE, ## Keep samples and fct evals
+                 phi = NULL, ## Function to calculate mean of
+                 ...) {
+    if (is.numeric(seed)) set.seed(seed)
     ## Clean up on exit
     last.par.old <- last.par
     last.par.best.old <- last.par.best
-    on.exit({last.par <<- last.par.old;
-             last.par.best <<- last.par.best.old})
+    on.exit({
+      last.par <<- last.par.old
+      last.par.best <<- last.par.best.old
+    })
     ## Update Cholesky needed by reference measure
-    h <- spHess(par0,random=TRUE)
+    h <- spHess(par0, random = TRUE)
     L <- L.created.by.newton
-    updateCholesky(L,h)             ## P %*% h %*% Pt = L %*% Lt
-    rmvnorm <- function(n){
-        u <- matrix(rnorm(ncol(L)*n),ncol(L),n)
-        u <- solve(L,u,system="Lt") ## Solve Lt^-1 %*% u
-        u <- solve(L,u,system="Pt") ## Multiply Pt %*% u
-        as.matrix(u)
+    updateCholesky(L, h) ## P %*% h %*% Pt = L %*% Lt
+    rmvnorm <- function(n) {
+      u <- matrix(rnorm(ncol(L) * n), ncol(L), n)
+      u <- solve(L, u, system = "Lt") ## Solve Lt^-1 %*% u
+      u <- solve(L, u, system = "Pt") ## Multiply Pt %*% u
+      as.matrix(u)
     }
-    M.5.log2pi <- -.5* log(2*pi) # = log(1/sqrt(2*pi))
-    logdmvnorm <- function(u){
-        logdetH.5 <- determinant(L, logarithm=TRUE, sqrt=TRUE)$modulus # = log(det(L)) =  .5 * log(det(H))
-        nrow(h)*M.5.log2pi + logdetH.5 - .5*colSums(u*as.matrix(h %*% u))
+    M.5.log2pi <- -.5 * log(2 * pi) # = log(1/sqrt(2*pi))
+    logdmvnorm <- function(u) {
+      logdetH.5 <- determinant(L, logarithm = TRUE, sqrt = TRUE)$modulus # = log(det(L)) =  .5 * log(det(H))
+      nrow(h) * M.5.log2pi + logdetH.5 - .5 * colSums(u * as.matrix(h %*% u))
     }
-    eval.target <- function(u,order=0){
+    eval.target <- function(u, order = 0) {
       par[random] <- u
-      f(par,order=order)
+      f(par, order = order)
     }
     samples <- rmvnorm(n)
-    if(antithetic)samples <- cbind(samples,-samples) ## Antithetic variates
+    if (antithetic) samples <- cbind(samples, -samples) ## Antithetic variates
     log.density.propose <- logdmvnorm(samples)
-    samples <- samples+par0[random]
-    log.density.target <- -apply(samples,2,eval.target)
+    samples <- samples + par0[random]
+    log.density.target <- -apply(samples, 2, eval.target)
     log.density.target[is.nan(log.density.target)] <- -Inf
     I <- log.density.target - log.density.propose
     M <- max(I)
-    if(order>=1){
-      vec <- exp(I-M)
-      p <- vec/sum(vec)
-      i <- (p>0)
+    if (order >= 1) {
+      vec <- exp(I - M)
+      p <- vec / sum(vec)
+      i <- (p > 0)
       p <- p[i]
-      I1 <- apply(samples[,i,drop=FALSE],2,eval.target,order=1)[-random,,drop=FALSE]
+      I1 <- apply(samples[, i, drop = FALSE], 2, eval.target, order = 1)[-random, , drop = FALSE]
       gr <- as.vector(I1 %*% p)
-      if(order==1)return(gr)
+      if (order == 1) {
+        return(gr)
+      }
       ## I1I1 <- t(apply(I1,1,function(x)x%*%t(x)))
       ## I2 <- t(apply(samples,1,function(x)eval.target(x,order=2)[-random,-random]))
       ## h <- colMeans(vec*(-I1I1+I2))/mean(vec)+as.vector(gr)%*%t(as.vector(gr))
       ## if(order==2)return(h)
     }
-    if(!is.null(phi)){
-      phival <- apply(samples,2,phi)
-      if(is.null(dim(phival)))phival <- t(phival)
-      p <- exp(I-M); p <- p/sum(p)
+    if (!is.null(phi)) {
+      phival <- apply(samples, 2, phi)
+      if (is.null(dim(phival))) phival <- t(phival)
+      p <- exp(I - M)
+      p <- p / sum(p)
       ans <- phival %*% p
       return(ans)
     }
-    value <- -log(mean(exp(I-M)))-M
-    ci <- 1.96*sd(exp(I-M))/sqrt(n)
-    attr(value,"confint") <- -log(mean(exp(I-M))+c(lower=ci,upper=-ci))-M
-    if(keep){
-        attr(value,"samples") <- samples
-        attr(value,"nlratio") <- -I
+    value <- -log(mean(exp(I - M))) - M
+    ci <- 1.96 * sd(exp(I - M)) / sqrt(n)
+    attr(value, "confint") <- -log(mean(exp(I - M)) + c(lower = ci, upper = -ci)) - M
+    if (keep) {
+      attr(value, "samples") <- samples
+      attr(value, "nlratio") <- -I
     }
     value
   }
 
-  report <- function(par=last.par){
-    f(par,order=0,type="double")
+  report <- function(par = last.par) {
+    f(par, order = 0, type = "double")
     as.list(reportenv)
   }
-  simulate <- function(par = last.par, complete = FALSE){
+  simulate <- function(par = last.par, complete = FALSE) {
     f(par, order = 0, type = "double", do_simulate = TRUE)
     sim <- as.list(reportenv)
-    if(complete){
-        ans <- data
-        ans[names(sim)] <- sim
+    if (complete) {
+      ans <- data
+      ans[names(sim)] <- sim
     } else {
-        ans <- sim
+      ans <- sim
     }
     ans
   }
 
   ## return :
   list(
-      ## Default parameter vector
-      par = par[lfixed()],
-      ## Objective function
-      fn = function(x = last.par[lfixed()], ...) {
-          if (tracepar) { cat("par:\n"); print(x) }
-          if (!validpar(x)) return(NaN)
-          if (is.null(random)) {
-              ans <- f(x,order=0)
-              if (!ADreport) {
-                  if (is.finite(ans) && ans < value.best) {
-                      last.par.best <<- x; value.best <<- ans
-                  }
-              }
-          } else {
-              ans <- try({
-                  if(MCcontrol$doMC){
-                      ff(x, order=0)
-                      MC(last.par, n=MCcontrol$n, seed=MCcontrol$seed, order=0)
-                  } else
-                      ff(x,order=0)
-              }, silent=silent)
-              if (is.character(ans)) ans <- NaN
+    ## Default parameter vector
+    par = par[lfixed()],
+    ## Objective function
+    fn = function(x = last.par[lfixed()], ...) {
+      if (tracepar) {
+        cat("par:\n")
+        print(x)
+      }
+      if (!validpar(x)) {
+        return(NaN)
+      }
+      if (is.null(random)) {
+        ans <- f(x, order = 0)
+        if (!ADreport) {
+          if (is.finite(ans) && ans < value.best) {
+            last.par.best <<- x
+            value.best <<- ans
           }
-          ans
-      },
-      ## Gradient of objective function
-      gr = function(x = last.par[lfixed()], ...) {
-          if (is.null(random)) {
-              ans <- f(x, order=1)
-          } else {
-              ans <- try( {
-                  if (MCcontrol$doMC) {
-                      ff(x,order=0)
-                      MC(last.par, n=MCcontrol$n, seed=MCcontrol$seed, order=1)
-                  } else
-                      ff(x,order=1)
-              }, silent=silent)
-              if(is.character(ans)) ans <- rep(NaN, length(x))
-          }
-          if (tracemgc) cat("outer mgc: ", max(abs(ans)), "\n")
-          ans
-      },
-      ## Hessian of objective function
-      he = function(x = last.par[lfixed()], atomic=usingAtomics()) {
-          if (is.null(random)) {
-              ## If no atomics on tape we have all orders implemented:
-              if(!atomic) return( f(x,order=2) )
-              ## Otherwise, get Hessian as 1st order derivative of gradient:
-              if(is.null(ADGrad))
-                  retape_adgrad()
-              return( f(x, type="ADGrad", order=1) )
-          } else {
-              stop("Hessian not yet implemented for models with random effects.")
-          }
-      },
-      ## Other methods and flags
-      hessian=hessian,
-      method=method,
-      retape=retape,
-      env=env,
-      report=report,
-      simulate=simulate,...)
-}## end{ MakeADFun }
+        }
+      } else {
+        ans <- try(
+          {
+            if (MCcontrol$doMC) {
+              ff(x, order = 0)
+              MC(last.par, n = MCcontrol$n, seed = MCcontrol$seed, order = 0)
+            } else {
+              ff(x, order = 0)
+            }
+          },
+          silent = silent
+        )
+        if (is.character(ans)) ans <- NaN
+      }
+      ans
+    },
+    ## Gradient of objective function
+    gr = function(x = last.par[lfixed()], ...) {
+      if (is.null(random)) {
+        ans <- f(x, order = 1)
+      } else {
+        ans <- try(
+          {
+            if (MCcontrol$doMC) {
+              ff(x, order = 0)
+              MC(last.par, n = MCcontrol$n, seed = MCcontrol$seed, order = 1)
+            } else {
+              ff(x, order = 1)
+            }
+          },
+          silent = silent
+        )
+        if (is.character(ans)) ans <- rep(NaN, length(x))
+      }
+      if (tracemgc) cat("outer mgc: ", max(abs(ans)), "\n")
+      ans
+    },
+    ## Hessian of objective function
+    he = function(x = last.par[lfixed()], atomic = usingAtomics()) {
+      if (is.null(random)) {
+        ## If no atomics on tape we have all orders implemented:
+        if (!atomic) {
+          return(f(x, order = 2))
+        }
+        ## Otherwise, get Hessian as 1st order derivative of gradient:
+        if (is.null(ADGrad)) {
+          retape_adgrad()
+        }
+        return(f(x, type = "ADGrad", order = 1))
+      } else {
+        stop("Hessian not yet implemented for models with random effects.")
+      }
+    },
+    ## Other methods and flags
+    hessian = hessian,
+    method = method,
+    retape = retape,
+    env = env,
+    report = report,
+    simulate = simulate, ...
+  )
+} ## end{ MakeADFun }
 
 ##' Free memory allocated on the C++ side by \code{MakeADFun}.
 ##'
@@ -1207,38 +1291,38 @@ MakeADFun <- function(data, parameters, map=list(),
 ##' obj$fn()                                    ## Re-allocate external pointers
 ##' }
 FreeADFun <- function(obj) {
-    free <- function(ADFun) {
-        if (! is.null(ADFun) ) {
-            if ( ! isNullPointer(ADFun$ptr) ) {
-                .Call("FreeADFunObject", ADFun$ptr, PACKAGE = obj$env$DLL)
-            }
-        }
+  free <- function(ADFun) {
+    if (!is.null(ADFun)) {
+      if (!isNullPointer(ADFun$ptr)) {
+        .Call("FreeADFunObject", ADFun$ptr, PACKAGE = obj$env$DLL)
+      }
     }
-    free(obj$env$Fun)
-    free(obj$env$ADFun)
-    free(obj$env$ADGrad)
-    ADHess <- environment(obj$env$spHess)$ADHess
-    free(ADHess)
-    return(NULL)
+  }
+  free(obj$env$Fun)
+  free(obj$env$ADFun)
+  free(obj$env$ADGrad)
+  ADHess <- environment(obj$env$spHess)$ADHess
+  free(ADHess)
+  return(NULL)
 }
 
-.removeComments <- function(x){
-  x <- paste(x,collapse="\n")
-  remlong <- function(x)gsub("/\\*.*?\\*/","",x)
-  remshort <- function(x)gsub("//[^\n]*\n","\n",x)
+.removeComments <- function(x) {
+  x <- paste(x, collapse = "\n")
+  remlong <- function(x) gsub("/\\*.*?\\*/", "", x)
+  remshort <- function(x) gsub("//[^\n]*\n", "\n", x)
   x <- remshort(remlong(x))
-  strsplit(x,"\n")[[1]]
+  strsplit(x, "\n")[[1]]
 }
 
-isParallelTemplate <- function(file){
+isParallelTemplate <- function(file) {
   code <- readLines(file)
   code <- .removeComments(code)
-  length(grep("^[ \t]*PARALLEL_",code))>0  ||
-  length(grep("^[ \t]*parallel_accumulator",code))>0
+  length(grep("^[ \t]*PARALLEL_", code)) > 0 ||
+    length(grep("^[ \t]*parallel_accumulator", code)) > 0
 }
 
 isParallelDLL <- function(DLL) {
-    attr( .Call("getFramework", PACKAGE = DLL), "openmp")
+  attr(.Call("getFramework", PACKAGE = DLL), "openmp")
 }
 
 ##' Control number of OpenMP threads used by a TMB model.
@@ -1257,22 +1341,24 @@ isParallelDLL <- function(DLL) {
 ##' @param autopar Logical; use automatic parallelization - see details.
 ##' @param DLL DLL of a TMB model.
 ##' @return Number of threads.
-openmp <- function(n=NULL, max=FALSE, autopar=NULL, DLL=getUserDLL()) {
-    ## Set n to max possible value?
-    if (max) {
-        n <- .Call("omp_num_threads", NULL, PACKAGE="TMB")
-    }
-    ## Set n ?
-    if (!is.null(n))
-        config(nthreads=n, DLL=DLL)
-    ## Set autopar ?
-    if (is.logical(autopar))
-        config(autopar=autopar, DLL=DLL)
-    ## Return current value
-    ans <- config(DLL=DLL)$nthreads
-    names(ans) <- DLL
-    attr(ans, "autopar") <- as.logical(config(DLL=DLL)$autopar)
-    ans
+openmp <- function(n = NULL, max = FALSE, autopar = NULL, DLL = getUserDLL()) {
+  ## Set n to max possible value?
+  if (max) {
+    n <- .Call("omp_num_threads", NULL, PACKAGE = "TMB")
+  }
+  ## Set n ?
+  if (!is.null(n)) {
+    config(nthreads = n, DLL = DLL)
+  }
+  ## Set autopar ?
+  if (is.logical(autopar)) {
+    config(autopar = autopar, DLL = DLL)
+  }
+  ## Return current value
+  ans <- config(DLL = DLL)$nthreads
+  names(ans) <- DLL
+  attr(ans, "autopar") <- as.logical(config(DLL = DLL)$autopar)
+  ans
 }
 
 ##' Compile a C++ template into a shared object file. OpenMP flag is set if the template is detected to be parallel.
@@ -1327,78 +1413,83 @@ openmp <- function(n=NULL, max=FALSE, autopar=NULL, DLL=getUserDLL()) {
 ##' @param max.order Maximum derivative order of compiler generated atomic special functions - see details.
 ##' @param ... Passed as Makeconf variables.
 ##' @seealso \code{\link{precompile}}
-compile <- function(file,flags="",safebounds=TRUE,safeunload=TRUE,
-                    openmp=isParallelTemplate(file[1]),libtmb=TRUE,
-                    libinit=TRUE,tracesweep=FALSE,framework=getOption("tmb.ad.framework"),
-                    supernodal=FALSE,longint=FALSE,
-                    eigen.disable.warnings=TRUE,
-                    max.order=NULL,
-                    ...){
+compile <- function(file, flags = "", safebounds = TRUE, safeunload = TRUE,
+                    openmp = isParallelTemplate(file[1]), libtmb = TRUE,
+                    libinit = TRUE, tracesweep = FALSE, framework = getOption("tmb.ad.framework"),
+                    supernodal = FALSE, longint = FALSE,
+                    eigen.disable.warnings = TRUE,
+                    max.order = NULL,
+                    ...) {
   framework <- match.arg(framework, c("CppAD", "TMBad"))
   ## Handle extra list(...) arguments plus modifications
   dotargs <- list(...)
   CPPFLAGS <- PKG_LIBS <- CLINK_CPPFLAGS <- NULL ## Visible binding (CRAN)
-  '%+=%' <- function(VAR, x) {
-      VAR <- deparse(substitute(VAR))
-      dotargs[[VAR]] <<- paste(dotargs[[VAR]], x)
+  "%+=%" <- function(VAR, x) {
+    VAR <- deparse(substitute(VAR))
+    dotargs[[VAR]] <<- paste(dotargs[[VAR]], x)
   }
-  if(.Platform$OS.type=="windows"){
+  if (.Platform$OS.type == "windows") {
     ## Overload system.file
-    system.file <- function(...){
+    system.file <- function(...) {
       ans <- base::system.file(...)
       chartr("\\", "/", shortPathName(ans))
     }
   }
   qsystem.file <- function(...) {
-      paste0('"', system.file(...), '"')
+    paste0('"', system.file(...), '"')
   }
   ## Cannot use the pre-compiled library when enabling sweep tracing
   if (tracesweep) libtmb <- FALSE
   ## libtmb existence
   debug <-
-      length(grep("-O0", flags)) &&
-      length(grep("-g",  flags))
+    length(grep("-O0", flags)) &&
+      length(grep("-g", flags))
   fpath <- system.file(paste0("libs", Sys.getenv("R_ARCH")),
-                       package="TMB")
-  f <- paste0(fpath,
-              "/libTMB",
-              if      (openmp) "omp"
-              else if (debug)  "dbg",
-              ".cpp")
+    package = "TMB"
+  )
+  f <- paste0(
+    fpath,
+    "/libTMB",
+    if (openmp) {
+      "omp"
+    } else if (debug) "dbg",
+    ".cpp"
+  )
   libtmb <- libtmb && file.exists(f)
-  if(libtmb) file <- c(file, f)
+  if (libtmb) file <- c(file, f)
   ## Function to create temporary makevars, Note:
   ## * R_MAKEVARS_USER overrules all other Makevars in tools:::.shlib_internal
-  oldmvuser <- mvuser <- Sys.getenv("R_MAKEVARS_USER",NA)
-  if(is.na(oldmvuser)){
+  oldmvuser <- mvuser <- Sys.getenv("R_MAKEVARS_USER", NA)
+  if (is.na(oldmvuser)) {
     on.exit(Sys.unsetenv("R_MAKEVARS_USER"))
   } else {
-    on.exit(Sys.setenv(R_MAKEVARS_USER=oldmvuser))
+    on.exit(Sys.setenv(R_MAKEVARS_USER = oldmvuser))
   }
-  if(is.na(mvuser) && file.exists(f <- path.expand("~/.R/Makevars")))
+  if (is.na(mvuser) && file.exists(f <- path.expand("~/.R/Makevars"))) {
     mvuser <- f
-  if(!is.na(mvuser)){
-    cat("Note: Using Makevars in",mvuser,"\n")
   }
-  makevars <- function(...){
+  if (!is.na(mvuser)) {
+    cat("Note: Using Makevars in", mvuser, "\n")
+  }
+  makevars <- function(...) {
     file <- tempfile()
-    args <- unlist(list(...), use.names=TRUE)
-    txt <- paste(names(args),args,sep="=")
-    if(!is.na(mvuser)){
-      if(file.exists(mvuser)){
-        txt <- c(readLines(mvuser),txt)
+    args <- unlist(list(...), use.names = TRUE)
+    txt <- paste(names(args), args, sep = "=")
+    if (!is.na(mvuser)) {
+      if (file.exists(mvuser)) {
+        txt <- c(readLines(mvuser), txt)
       }
     }
-    writeLines(txt,file)
-    Sys.setenv(R_MAKEVARS_USER=file)
+    writeLines(txt, file)
+    Sys.setenv(R_MAKEVARS_USER = file)
     file
   }
   ## Check that libname is valid C entry.
-  libname <- sub("\\.[^\\.]*$","",basename(file[1]))
-  if(safeunload){
-    valid <- c(letters[1:26],LETTERS[1:26],0:9,"_")
-    invalid <- setdiff(unique(strsplit(libname,"")[[1]]),valid)
-    if(length(invalid)>0){
+  libname <- sub("\\.[^\\.]*$", "", basename(file[1]))
+  if (safeunload) {
+    valid <- c(letters[1:26], LETTERS[1:26], 0:9, "_")
+    invalid <- setdiff(unique(strsplit(libname, "")[[1]]), valid)
+    if (length(invalid) > 0) {
       cat("Your library name has invalid characters:\n")
       print(invalid)
       cat("It is recommended to replace invalid characters by underscore.\n")
@@ -1407,65 +1498,72 @@ compile <- function(file,flags="",safebounds=TRUE,safeunload=TRUE,
     }
   }
   ## On windows the DLL must be unloaded before compiling
-  if(.Platform$OS.type=="windows"){
-    tr <- try(dyn.unload(dynlib(libname)),silent=TRUE)
-    if(!is(tr,"try-error"))cat("Note: Library",paste0("'",dynlib(libname),"'"),"was unloaded.\n")
+  if (.Platform$OS.type == "windows") {
+    tr <- try(dyn.unload(dynlib(libname)), silent = TRUE)
+    if (!is(tr, "try-error")) cat("Note: Library", paste0("'", dynlib(libname), "'"), "was unloaded.\n")
   }
   ## Includes and preprocessor flags specific for the template
-  useRcppEigen <- !file.exists( system.file("include/Eigen",package="TMB") )
-  useContrib   <-  file.exists( system.file("include/contrib",package="TMB") )
-  ppflags <- paste(paste0("-I",qsystem.file("include",package="TMB")),
-                   paste0("-I",qsystem.file("include",package="RcppEigen"))[useRcppEigen],
-                   paste0("-I",qsystem.file("include/contrib",package="TMB"))[useContrib],
-                   "-DTMB_SAFEBOUNDS"[safebounds],
-                   "-DTMB_EIGEN_DISABLE_WARNINGS"[eigen.disable.warnings],
-                   paste0("-DLIB_UNLOAD=R_unload_",libname)[safeunload],
-                   "-DWITH_LIBTMB"[libtmb],
-                   paste0("-DTMB_LIB_INIT=R_init_",libname)[libinit],
-                   "-DCPPAD_FORWARD0SWEEP_TRACE"[tracesweep],
-                   paste0("-D",toupper(framework),"_FRAMEWORK")
-                   )
+  useRcppEigen <- !file.exists(system.file("include/Eigen", package = "TMB"))
+  useContrib <- file.exists(system.file("include/contrib", package = "TMB"))
+  ppflags <- paste(
+    paste0("-I", qsystem.file("include", package = "TMB")),
+    paste0("-I", qsystem.file("include", package = "RcppEigen"))[useRcppEigen],
+    paste0("-I", qsystem.file("include/contrib", package = "TMB"))[useContrib],
+    "-DTMB_SAFEBOUNDS"[safebounds],
+    "-DTMB_EIGEN_DISABLE_WARNINGS"[eigen.disable.warnings],
+    paste0("-DLIB_UNLOAD=R_unload_", libname)[safeunload],
+    "-DWITH_LIBTMB"[libtmb],
+    paste0("-DTMB_LIB_INIT=R_init_", libname)[libinit],
+    "-DCPPAD_FORWARD0SWEEP_TRACE"[tracesweep],
+    paste0("-D", toupper(framework), "_FRAMEWORK")
+  )
   ## *Very* primitive guess of suitesparse configuration
   ## (If wrong set supernodal=FALSE and tweak manually)
   if (supernodal) {
-      if (framework != "TMBad")
-          stop("'supernodal=TRUE' only works when framework='TMBad'")
-      CPPFLAGS %+=%
-          "-DTMBAD_SUPERNODAL -DEIGEN_USE_BLAS -DEIGEN_USE_LAPACKE"
-      PKG_LIBS %+=%
-          if (.Platform$OS.type=="windows")
-              "-lcholmod -lcolamd -lamd -lsuitesparseconfig -lopenblas $(SHLIB_OPENMP_CXXFLAGS)"
-          else
-              "-lcholmod"
-      CLINK_CPPFLAGS %+=%
-          if (.Platform$OS.type=="windows")
-              ""
-          else
-              "-I/usr/include/suitesparse"
+    if (framework != "TMBad") {
+      stop("'supernodal=TRUE' only works when framework='TMBad'")
+    }
+    CPPFLAGS %+=%
+      "-DTMBAD_SUPERNODAL -DEIGEN_USE_BLAS -DEIGEN_USE_LAPACKE"
+    PKG_LIBS %+=%
+      if (.Platform$OS.type == "windows") {
+        "-lcholmod -lcolamd -lamd -lsuitesparseconfig -lopenblas $(SHLIB_OPENMP_CXXFLAGS)"
+      } else {
+        "-lcholmod"
+      }
+    CLINK_CPPFLAGS %+=%
+      if (.Platform$OS.type == "windows") {
+        ""
+      } else {
+        "-I/usr/include/suitesparse"
+      }
   }
   ## Long integer support
   if (longint) {
-      CPPFLAGS %+=%
-          if (.Platform$OS.type=="windows")
-              "-DTMB_SPARSE_STORAGE_INDEX='long long'"
-          else
-              "-DTMB_SPARSE_STORAGE_INDEX='long int'"
+    CPPFLAGS %+=%
+      if (.Platform$OS.type == "windows") {
+        "-DTMB_SPARSE_STORAGE_INDEX='long long'"
+      } else {
+        "-DTMB_SPARSE_STORAGE_INDEX='long int'"
+      }
   }
   ## TMB_MAX_ORDER
   if (!is.null(max.order)) {
-      CPPFLAGS %+=% paste0("-DTMB_MAX_ORDER=", max.order)
+    CPPFLAGS %+=% paste0("-DTMB_MAX_ORDER=", max.order)
   }
   ## Makevars specific for template
-  mvfile <- makevars(PKG_CPPFLAGS=ppflags,
-                     PKG_LIBS=paste(
-                       "$(SHLIB_OPENMP_CXXFLAGS)"[openmp] ),
-                     PKG_CXXFLAGS="$(SHLIB_OPENMP_CXXFLAGS)"[openmp],
-                     CXXFLAGS=flags[flags!=""], ## Optionally override cxxflags
-                     dotargs
-                     )
-  on.exit(file.remove(mvfile),add=TRUE)
-  status <- .shlib_internal(file)  ## Was: tools:::.shlib_internal(file)
-  if(status!=0) stop("Compilation failed")
+  mvfile <- makevars(
+    PKG_CPPFLAGS = ppflags,
+    PKG_LIBS = paste(
+      "$(SHLIB_OPENMP_CXXFLAGS)"[openmp]
+    ),
+    PKG_CXXFLAGS = "$(SHLIB_OPENMP_CXXFLAGS)"[openmp],
+    CXXFLAGS = flags[flags != ""], ## Optionally override cxxflags
+    dotargs
+  )
+  on.exit(file.remove(mvfile), add = TRUE)
+  status <- .shlib_internal(file) ## Was: tools:::.shlib_internal(file)
+  if (status != 0) stop("Compilation failed")
   status
 }
 
@@ -1498,64 +1596,65 @@ compile <- function(file,flags="",safebounds=TRUE,safeunload=TRUE,
 ##' ## Perform precompilation by running a model
 ##' runExample(all = TRUE)
 ##' }
-precompile <- function(all=TRUE, clean=FALSE, trace=TRUE, get.header=FALSE, ...){
+precompile <- function(all = TRUE, clean = FALSE, trace = TRUE, get.header = FALSE, ...) {
   owdir <- getwd()
   on.exit(setwd(owdir))
   if (get.header) {
-      ## TMB.h
-      outfile <- paste(getwd(), "TMB.h", sep="/")
-      code <- c(
-          "#ifndef TMB_H",
-          "#define TMB_H",
-          "#ifdef TMB_PRECOMPILE",
-          "#define TMB_PRECOMPILE_ATOMICS"[all],
-          "#else",
-          "#define HAVE_PRECOMPILED_ATOMICS"[all],
-          "#define WITH_LIBTMB",
-          "#endif",
-          "#include <TMB.hpp>",
-          precompileSource()[all],
-          "#endif")
-      writeLines(code, outfile)
-      if(trace) message(outfile, " generated")
-      ## TMB.cpp
-      outfile <- paste(getwd(), "TMB.cpp", sep="/")
-      code <- c(
-          "#define TMB_PRECOMPILE",
-          '#include "TMB.h"'
-      )
-      writeLines(code, outfile)
-      if(trace) message(outfile, " generated")
+    ## TMB.h
+    outfile <- paste(getwd(), "TMB.h", sep = "/")
+    code <- c(
+      "#ifndef TMB_H",
+      "#define TMB_H",
+      "#ifdef TMB_PRECOMPILE",
+      "#define TMB_PRECOMPILE_ATOMICS"[all],
+      "#else",
+      "#define HAVE_PRECOMPILED_ATOMICS"[all],
+      "#define WITH_LIBTMB",
+      "#endif",
+      "#include <TMB.hpp>",
+      precompileSource()[all],
+      "#endif"
+    )
+    writeLines(code, outfile)
+    if (trace) message(outfile, " generated")
+    ## TMB.cpp
+    outfile <- paste(getwd(), "TMB.cpp", sep = "/")
+    code <- c(
+      "#define TMB_PRECOMPILE",
+      '#include "TMB.h"'
+    )
+    writeLines(code, outfile)
+    if (trace) message(outfile, " generated")
   } else {
-      folder <- system.file(paste0("libs", Sys.getenv("R_ARCH")), package="TMB")
-      setwd(folder)
-      if(clean){
-          f <- dir(pattern = "^libTMB")
-          if(length(f) && trace) cat("Removing:", f, "\n")
-          file.remove(f)
-          f <- system.file(paste0("include/precompile.hpp"), package="TMB")
-          file.create(f)
-          return(NULL)
-      }
-      ## Cleanup before applying changes:
-      precompile(clean = TRUE)
-      ## Precompile frequently used classes:
-      outfile <-
-          paste0(system.file("include", package="TMB"), "/precompile.hpp")
-      if(all) writeLines(precompileSource(), outfile)
-      code <- c(
-          "#undef  TMB_LIB_INIT",
-          "#undef  LIB_UNLOAD",
-          "#undef  WITH_LIBTMB",
-          "#undef  TMB_PRECOMPILE_ATOMICS",
-          "#define TMB_PRECOMPILE_ATOMICS 1",
-          "#pragma message \"Running TMB precompilation...\""[trace],
-          "#include <TMB.hpp>"
-      )
-      writeLines(code, "libTMB.cpp")
-      writeLines(code, "libTMBomp.cpp")
-      writeLines(code, "libTMBdbg.cpp")
-      if(trace) message("Precompilation sources generated")
+    folder <- system.file(paste0("libs", Sys.getenv("R_ARCH")), package = "TMB")
+    setwd(folder)
+    if (clean) {
+      f <- dir(pattern = "^libTMB")
+      if (length(f) && trace) cat("Removing:", f, "\n")
+      file.remove(f)
+      f <- system.file(paste0("include/precompile.hpp"), package = "TMB")
+      file.create(f)
+      return(NULL)
+    }
+    ## Cleanup before applying changes:
+    precompile(clean = TRUE)
+    ## Precompile frequently used classes:
+    outfile <-
+      paste0(system.file("include", package = "TMB"), "/precompile.hpp")
+    if (all) writeLines(precompileSource(), outfile)
+    code <- c(
+      "#undef  TMB_LIB_INIT",
+      "#undef  LIB_UNLOAD",
+      "#undef  WITH_LIBTMB",
+      "#undef  TMB_PRECOMPILE_ATOMICS",
+      "#define TMB_PRECOMPILE_ATOMICS 1",
+      "#pragma message \"Running TMB precompilation...\""[trace],
+      "#include <TMB.hpp>"
+    )
+    writeLines(code, "libTMB.cpp")
+    writeLines(code, "libTMBomp.cpp")
+    writeLines(code, "libTMBdbg.cpp")
+    if (trace) message("Precompilation sources generated")
   }
 }
 
@@ -1566,7 +1665,7 @@ precompile <- function(all=TRUE, clean=FALSE, trace=TRUE, get.header=FALSE, ...)
 ##' @title Add dynlib extension
 ##' @param name Library name without extension
 ##' @return Character
-dynlib <- function(name)paste0(name,.Platform$dynlib.ext)
+dynlib <- function(name) paste0(name, .Platform$dynlib.ext)
 
 ##' Create a cpp template to get started.
 ##'
@@ -1623,13 +1722,14 @@ dynlib <- function(name)paste0(name,.Platform$dynlib.ext)
 ##' @param file Optional name of cpp file.
 ##' @examples
 ##' template()
-template <- function(file=NULL){
-  x <- readLines(system.file("template.cpp",package="TMB"))
-  if(!is.null(file)){
-    if(file.exists(file))stop("File '",file,"' exists")
-    writeLines(x,file)
+template <- function(file = NULL) {
+  x <- readLines(system.file("template.cpp", package = "TMB"))
+  if (!is.null(file)) {
+    if (file.exists(file)) stop("File '", file, "' exists")
+    writeLines(x, file)
+  } else {
+    cat(paste(x, collapse = "\n"))
   }
-  else cat(paste(x,collapse="\n"))
 }
 
 ##' Create a skeleton of required R-code once the cpp template is ready.
@@ -1639,32 +1739,35 @@ template <- function(file=NULL){
 ##' @examples
 ##' file <- system.file("examples/simple.cpp", package = "TMB")
 ##' Rinterface(file)
-Rinterface <- function(file){
+Rinterface <- function(file) {
   libname <- sub("\\.[^\\.]*$", "", basename(file))
   x <- readLines(file)
   x <- .removeComments(x)
-  items2list <- function(items){
-    if(length(items)==0)return("list(),")
-    paste0("list(\n",paste(paste0("  ",items,"=  "),collapse=",\n"),"\n ),")
+  items2list <- function(items) {
+    if (length(items) == 0) {
+      return("list(),")
+    }
+    paste0("list(\n", paste(paste0("  ", items, "=  "), collapse = ",\n"), "\n ),")
   }
   ## Data
   dataregexp <- "^[ ]*DATA_.*?\\((.*?)\\).*"
-  datalines <- grep(dataregexp,x,value=TRUE)
-  dataitems <- sub(dataregexp,"\\1",datalines)
+  datalines <- grep(dataregexp, x, value = TRUE)
+  dataitems <- sub(dataregexp, "\\1", datalines)
   ## Parameters
   parameterregexp <- "^[ ]*PARAMETER.*?\\((.*?)\\).*"
-  parameterlines <- grep(parameterregexp,x,value=TRUE)
-  parameteritems <- sub(parameterregexp,"\\1",parameterlines)
-  libname <- paste0("\"",libname,"\"")
-  txt <- c("library(TMB)",
-           paste0("dyn.load(dynlib(",libname,"))"),
-           "MakeADFun(",
-           paste0(" data=",items2list(dataitems)),
-           paste0(" parameters=",items2list(parameteritems)),
-           paste0(" DLL=",libname),
-           ")\n"
-           )
-  cat(paste(txt,collapse="\n"))
+  parameterlines <- grep(parameterregexp, x, value = TRUE)
+  parameteritems <- sub(parameterregexp, "\\1", parameterlines)
+  libname <- paste0("\"", libname, "\"")
+  txt <- c(
+    "library(TMB)",
+    paste0("dyn.load(dynlib(", libname, "))"),
+    "MakeADFun(",
+    paste0(" data=", items2list(dataitems)),
+    paste0(" parameters=", items2list(parameteritems)),
+    paste0(" DLL=", libname),
+    ")\n"
+  )
+  cat(paste(txt, collapse = "\n"))
 }
 
 ## Recommended settings:
@@ -1712,84 +1815,92 @@ Rinterface <- function(file){
 ##' @param ... Currently unused.
 ##' @return List with solution similar to \code{optim} output.
 ##' @seealso \code{\link{newtonOption}}
-newton <- function (par,fn,gr,he,
-                    trace = 1,
-                    maxit = 100,
-                    tol = 1e-8,
-                    alpha = 1,
-                    smartsearch = TRUE,
-                    mgcmax = 1e60,
-                    super = TRUE,
-                    silent = TRUE,
-                    ustep = 1, ## Start out optimistic: Newton step
-                    power=.5, ## decrease=function(u)const*u^power
-                    u0=1e-4,  ## Increase u=0 to this value
-                    grad.tol = tol,
-                    step.tol = tol,
-                    tol10 = 1e-3, ## Try to exit if last 10 iterations not improved much
-                    env=environment(),
-                    ...)
-{
+newton <- function(par, fn, gr, he,
+                   trace = 1,
+                   maxit = 100,
+                   tol = 1e-8,
+                   alpha = 1,
+                   smartsearch = TRUE,
+                   mgcmax = 1e60,
+                   super = TRUE,
+                   silent = TRUE,
+                   ustep = 1, ## Start out optimistic: Newton step
+                   power = .5, ## decrease=function(u)const*u^power
+                   u0 = 1e-4, ## Increase u=0 to this value
+                   grad.tol = tol,
+                   step.tol = tol,
+                   tol10 = 1e-3, ## Try to exit if last 10 iterations not improved much
+                   env = environment(),
+                   ...) {
   ## Test if a Cholesky factor is present inside the environment of "he" function.
   ## If not - create one...
-  if(is.null(L <- env$L.created.by.newton)) {
+  if (is.null(L <- env$L.created.by.newton)) {
     h.pattern <- he(par)
     ## Make sure Cholesky is succesful
     h.pattern@x[] <- 0
     diag(h.pattern) <- 1
-    L <- env$L.created.by.newton <- Cholesky(h.pattern, super=super)
+    L <- env$L.created.by.newton <- Cholesky(h.pattern, super = super)
   }
-  chol.solve <- function(h,g){
-    ##.Call("destructive_CHM_update",L,h,as.double(0),PACKAGE="Matrix")
-    updateCholesky(L,h)
-    as.vector(solveCholesky(L,g))
+  chol.solve <- function(h, g) {
+    ## .Call("destructive_CHM_update",L,h,as.double(0),PACKAGE="Matrix")
+    updateCholesky(L, h)
+    as.vector(solveCholesky(L, g))
   }
   ## optimize <- stats::optimize
   nam <- names(par)
   par <- as.vector(par)
   g <- h <- NULL
   ## pd.check: Quick test for hessian being positive definite
-  iterate <- function(par,pd.check=FALSE) {
-    if(pd.check){
-      if(is.null(h))return(TRUE)
+  iterate <- function(par, pd.check = FALSE) {
+    if (pd.check) {
+      if (is.null(h)) {
+        return(TRUE)
+      }
       h <<- he(par) ## Make sure hessian is updated
       PD <- updateCholesky(L, h)
-      return( PD )
+      return(PD)
     }
     g <<- as.vector(gr(par))
-    if(any( !is.finite(g) ))stop("Newton dropout because inner gradient had non-finite components.")
-    if(is.finite(mgcmax) && max(abs(g)) > mgcmax)
+    if (any(!is.finite(g))) stop("Newton dropout because inner gradient had non-finite components.")
+    if (is.finite(mgcmax) && max(abs(g)) > mgcmax) {
       stop("Newton dropout because inner gradient too steep.")
-    if(max(abs(g))<grad.tol)return(par)
+    }
+    if (max(abs(g)) < grad.tol) {
+      return(par)
+    }
     h <<- he(par)
-    if(smartsearch){
+    if (smartsearch) {
       fnpar <- fn(par)
       p <- NULL
-      f <- function(t,gradient=FALSE){
+      f <- function(t, gradient = FALSE) {
         ## Fast check: negative diagonal elements
         m <- min(diag(h))
-        if(m<0){
-          if(!(t>-m)){ ## h+t*I negative definite
-            ustep <<- min(ustep,invphi(-m))
+        if (m < 0) {
+          if (!(t > -m)) { ## h+t*I negative definite
+            ustep <<- min(ustep, invphi(-m))
             return(NaN)
           }
         }
         ## Passed...
         ## Now do more expensive check...
-        ##ok <- !is.character(try( .Call("destructive_CHM_update",L,h,as.double(t),PACKAGE="Matrix") , silent=silent))
+        ## ok <- !is.character(try( .Call("destructive_CHM_update",L,h,as.double(t),PACKAGE="Matrix") , silent=silent))
         ok <- updateCholesky(L, h, t)
-        if(!ok)return(NaN)
-        dp <- as.vector(solveCholesky(L,g))
-        p <<- par-dp
+        if (!ok) {
+          return(NaN)
+        }
+        dp <- as.vector(solveCholesky(L, g))
+        p <<- par - dp
         ans <- fn(p)
-        if(gradient)attr(ans,"gradient") <- sum(solveCholesky(L,dp)*gr(p))
+        if (gradient) attr(ans, "gradient") <- sum(solveCholesky(L, dp) * gr(p))
         ans
       }
 
       ## Adaptive stepsize algorithm (smartsearch)
-      phi <- function(u)1/u-1
-      invphi <- function(x)1/(x+1)
-      fu <- function(u){f(phi(u))}
+      phi <- function(u) 1 / u - 1
+      invphi <- function(x) 1 / (x + 1)
+      fu <- function(u) {
+        f(phi(u))
+      }
       ## ========== Functions controling the algorithm
       ## Important requirements:
       ## 1. increase(u) and decrease(u) takes values in [0,1]
@@ -1800,66 +1911,67 @@ newton <- function (par,fn,gr,he,
       ## * ustep must converge towards 1 (because 1 <==> Positive definite hessian)
 
       ## power<1 - controls the boundary *repulsion*
-      increase <- function(u)u0+(1-u0)*u^power
-      ##decrease <- function(u)1-increase(1-u)
+      increase <- function(u) u0 + (1 - u0) * u^power
+      ## decrease <- function(u)1-increase(1-u)
       ## Solve problem with accuracy when u apprach 0
-      decrease <- function(u)ifelse(u>1e-10,1-increase(1-u),(1-u0)*power*u)
-      ##plot(increase,0,1,ylim=c(0,1));plot(decrease,0,1,add=TRUE);abline(0,1)
+      decrease <- function(u) ifelse(u > 1e-10, 1 - increase(1 - u), (1 - u0) * power * u)
+      ## plot(increase,0,1,ylim=c(0,1));plot(decrease,0,1,add=TRUE);abline(0,1)
       ustep <<- increase(ustep)
       repeat{
         fu.value <- fu(ustep)
-        if(is.finite(fu.value)){
+        if (is.finite(fu.value)) {
           eps <- sqrt(.Machine$double.eps)
-          if(fu.value>fnpar+eps){
-            if(ustep<=0)break  ## Avoid trap
+          if (fu.value > fnpar + eps) {
+            if (ustep <= 0) break ## Avoid trap
             ustep <<- decrease(ustep)
+          } else {
+            break
           }
-          else break
         } else {
-          if(ustep<=0)break  ## Avoid trap
+          if (ustep <= 0) break ## Avoid trap
           ustep <<- decrease(ustep)
         }
       }
-      if(trace>=1)cat("value:", fu.value,"mgc:",max(abs(g)), "ustep:", ustep ,"\n")
+      if (trace >= 1) cat("value:", fu.value, "mgc:", max(abs(g)), "ustep:", ustep, "\n")
       return(p)
     }
-    dpar <- chol.solve(h,g) ## ordinary newton
-    if(trace>=1)cat("mgc:",max(abs(g)) ,"\n")
+    dpar <- chol.solve(h, g) ## ordinary newton
+    if (trace >= 1) cat("mgc:", max(abs(g)), "\n")
     par - alpha * dpar
   }
   norm <- function(x) sqrt(sum(x^2))
   fn.history <- numeric(maxit)
   fail <- 0
-  for (i in seq_len(maxit)){
+  for (i in seq_len(maxit)) {
     parold <- par
-    if(trace>=1)cat("iter:",i," ")
+    if (trace >= 1) cat("iter:", i, " ")
     par <- iterate(par)
     fn.history[i] <- fn(par)
-    if(i>10){
-      tail10 <- tail(fn.history[1:i],10)
+    if (i > 10) {
+      tail10 <- tail(fn.history[1:i], 10)
       improve10 <- tail10[1] - tail10[length(tail10)]
-      if(improve10<tol10){
-        if(trace>=1)cat("Not improving much - will try early exit...")
-        pd <- iterate(par,pd.check=TRUE)
-        if(trace>=1)cat("PD hess?:",pd,"\n")
-        if(pd)break
-        fail <- fail+1
+      if (improve10 < tol10) {
+        if (trace >= 1) cat("Not improving much - will try early exit...")
+        pd <- iterate(par, pd.check = TRUE)
+        if (trace >= 1) cat("PD hess?:", pd, "\n")
+        if (pd) break
+        fail <- fail + 1
       }
     }
-    if(norm(par-parold)<step.tol){
+    if (norm(par - parold) < step.tol) {
       break
     }
-    if(fail>5){
+    if (fail > 5) {
       stop("Newton drop out: Too many failed attempts.")
     }
   }
-  pd <- iterate(par,pd.check=TRUE)
-  if(!pd)stop("Newton failed to find minimum.")
+  pd <- iterate(par, pd.check = TRUE)
+  if (!pd) stop("Newton failed to find minimum.")
   names(par) <- nam
   value <- fn(par)
   g <- gr(par)
-  if(trace>=1)cat("mgc:",max(abs(g)),"\n")
-  list(par=par,value=value,gradient=g,hessian=h,iterations=i)
+  if (trace >= 1) cat("mgc:", max(abs(g)), "\n")
+  list(par = par, value = value, gradient = g, hessian = h, iterations = i)
 }
 
 ##' Inner-problem options can be set for a model object using this
@@ -1869,26 +1981,30 @@ newton <- function (par,fn,gr,he,
 ##' @param obj Object from \code{\link{MakeADFun}} for which to change settings.
 ##' @param ... Parameters for the \code{\link{newton}} optimizer to set.
 ##' @return List of updated parameters.
-newtonOption <- function(obj,...){
-  if(!is.environment(obj$env)){
+newtonOption <- function(obj, ...) {
+  if (!is.environment(obj$env)) {
     stop("First argument to 'newtonOption' must be a model object (output from MakeADFun)")
   }
   x <- list(...)
-  validOpts <- setdiff(names(formals(newton)),
-                       c("par","fn","gr","he","env","..."))
+  validOpts <- setdiff(
+    names(formals(newton)),
+    c("par", "fn", "gr", "he", "env", "...")
+  )
   inValidOpts <- setdiff(names(x), validOpts)
-  if(length(inValidOpts) > 0){
-      stop("Invalid newton option(s):", paste0(" '",inValidOpts,"'"))
+  if (length(inValidOpts) > 0) {
+    stop("Invalid newton option(s):", paste0(" '", inValidOpts, "'"))
   }
   obj$env$inner.control[names(x)] <- x
-  invisible( obj$env$inner.control )
+  invisible(obj$env$inner.control)
 }
 
-sparseHessianFun <- function(obj, skipFixedEffects=FALSE) {
+sparseHessianFun <- function(obj, skipFixedEffects = FALSE) {
   r <- obj$env$random
-  if (length(r) == 0) return (NULL)
+  if (length(r) == 0) {
+    return(NULL)
+  }
   skip <-
-    if(skipFixedEffects) {
+    if (skipFixedEffects) {
       ## Assuming that random effects comes first in parameter list, we can set
       ## skip <- as.integer(length(obj$env$par)-length(r)) ## ==number of fixed effects
       seq_along(obj$env$par)[-r]
@@ -1897,54 +2013,57 @@ sparseHessianFun <- function(obj, skipFixedEffects=FALSE) {
     }
   ## ptr.list
   ADHess <- MakeADHessObject(obj$env$data,
-                             obj$env$parameters,
-                             obj$env$reportenv,
-                             gf=obj$env$ADGrad$ptr,
-                             skip=skip, ## <-- Skip this index vector of parameters
-                             DLL=obj$env$DLL)
+    obj$env$parameters,
+    obj$env$reportenv,
+    gf = obj$env$ADGrad$ptr,
+    skip = skip, ## <-- Skip this index vector of parameters
+    DLL = obj$env$DLL
+  )
   ## Experiment !
   TransformADFunObject(ADHess,
-                       method = "reorder_random",
-                       random_order = r,
-                       mustWork = 0L)
-  ev <- function(par, set_tail=0) {
-      EvalADFunObject(ADHess, par, set_tail = set_tail)
+    method = "reorder_random",
+    random_order = r,
+    mustWork = 0L
+  )
+  ev <- function(par, set_tail = 0) {
+    EvalADFunObject(ADHess, par, set_tail = set_tail)
   }
   n <- as.integer(length(obj$env$par))
   M <- new("dsTMatrix",
-           i = as.integer(attr(ADHess$ptr,"i")),
-           j = as.integer(attr(ADHess$ptr,"j")),
-           x = ev(obj$env$par), Dim = c(n,n), uplo = "L")
+    i = as.integer(attr(ADHess$ptr, "i")),
+    j = as.integer(attr(ADHess$ptr, "j")),
+    x = ev(obj$env$par), Dim = c(n, n), uplo = "L"
+  )
   Hfull <- as(M, "CsparseMatrix") ## WAS: as(M,"dsCMatrix")
-  Hrandom <- Hfull[r,r,drop=FALSE]
+  Hrandom <- Hfull[r, r, drop = FALSE]
   ## before returning the function, remove unneeded variables from the environment:
   rm(skip, n, M)
-  function(par = obj$env$par, random=FALSE, set_tail=0) {
-    if(!random) {
+  function(par = obj$env$par, random = FALSE, set_tail = 0) {
+    if (!random) {
       Hfull@x[] <- ev(par)
       Hfull
-    } else if(skipFixedEffects) {
-        .Call("setxslot", Hrandom, ev(par), PACKAGE="TMB")
+    } else if (skipFixedEffects) {
+      .Call("setxslot", Hrandom, ev(par), PACKAGE = "TMB")
     } else {
-        Hfull@x[] <- ev(par, set_tail=set_tail)
-        Hfull[r,r]
+      Hfull@x[] <- ev(par, set_tail = set_tail)
+      Hfull[r, r]
     }
   }
 }
 
 ## Debugging utility: Check sparse hessian.
 ## By comparing with gradient differentiated in random direction.
-checkSparseHessian <- function(obj,par=obj$env$last.par,
+checkSparseHessian <- function(obj, par = obj$env$last.par,
                                w = rnorm(length(par)), ## random direction
-                               plot=TRUE,...){
+                               plot = TRUE, ...) {
   r <- obj$env$random
   w[-r] <- 0
   res1 <- obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w)[r]
-  res2 <- (obj$env$spHess(par)%*%w)[r]
-  res <- list(x=res1,y=res2)
-  if(plot){
-    plot(res,...)
-    abline(0,1,col="red")
+  res2 <- (obj$env$spHess(par) %*% w)[r]
+  res <- list(x = res1, y = res2)
+  if (plot) {
+    plot(res, ...)
+    abline(0, 1, col = "red")
   }
   invisible(res)
 }
@@ -1973,43 +2092,48 @@ checkSparseHessian <- function(obj,par=obj$env$last.par,
 ##' @param ... Extra paramters depending on the method.
 ##' @return NULL
 runSymbolicAnalysis <- function(obj,
-                                method=c("CHOLMOD", "incomplete"),
+                                method = c("CHOLMOD", "incomplete"),
                                 ...) {
   method <- match.arg(method)
-  if (method == "CHOLMOD")    return ( runSymbolicAnalysis1(obj, ...) )
-  if (method == "incomplete") return ( runSymbolicAnalysis2(obj, ...) )
+  if (method == "CHOLMOD") {
+    return(runSymbolicAnalysis1(obj, ...))
+  }
+  if (method == "incomplete") {
+    return(runSymbolicAnalysis2(obj, ...))
+  }
   stop("Unknown method: ", method)
 }
 runSymbolicAnalysis1 <- function(obj, ...) {
-  ok <- .Call("have_tmb_symbolic", PACKAGE="TMB")
-  if(!ok) {
+  ok <- .Call("have_tmb_symbolic", PACKAGE = "TMB")
+  if (!ok) {
     cat("note: tmb_symbolic not installed\n")
     return(NULL)
   }
-  h <- obj$env$spHess(random=TRUE)
+  h <- obj$env$spHess(random = TRUE)
   h@x[] <- 0
   diag(h) <- 1
-  L <- .Call("tmb_symbolic", h, PACKAGE="TMB")
+  L <- .Call("tmb_symbolic", h, PACKAGE = "TMB")
   obj$env$L.created.by.newton <- L
   NULL
 }
 ## Incomplete analysis
 runSymbolicAnalysis2 <- function(obj, ...) {
   ## Override defaults
-  config <- list(tol=1e-4, maxit=50, abstol=1e-10, relax=10, adaptive=TRUE, posdef=FALSE, trace=FALSE, perm=NULL, parallel=FALSE, stop.on.error=TRUE)
+  config <- list(tol = 1e-4, maxit = 50, abstol = 1e-10, relax = 10, adaptive = TRUE, posdef = FALSE, trace = FALSE, perm = NULL, parallel = FALSE, stop.on.error = TRUE)
   args <- list(...)
   config[names(args)] <- args
   ## Evaluate hessian
   par <- obj$env$last.par.best %||% obj$env$last.par %||% obj$env$par
-  h <- obj$env$spHess(par,random=TRUE)
+  h <- obj$env$spHess(par, random = TRUE)
   ## Pattern will change => clear matched pattern
   environment(obj$env$spHess)$ind1 <- NULL
   ## Permutation ?
   checkPerm <- function(perm) {
     perm <- as.integer(perm)
     if (min(perm) == 0) perm <- perm + 1L
-    if (length(perm) != nrow(h))
+    if (length(perm) != nrow(h)) {
       stop("Wrong length 'perm'")
+    }
     valid <- rep(FALSE, length(perm))
     valid[perm] <- TRUE
     if (!all(valid)) stop("'perm' must be a permutation")
@@ -2023,31 +2147,36 @@ runSymbolicAnalysis2 <- function(obj, ...) {
   }
   Permute <- function(h) {
     if (!is.null(perm)) {
-      h <- h[perm, perm, drop=FALSE]
+      h <- h[perm, perm, drop = FALSE]
     }
-    if (h@uplo == "L")
+    if (h@uplo == "L") {
       h <- Matrix::t(h)
+    }
     h
   }
   ## Run incomplete analysis
-  L <- .Call("tmb_ichol", Permute(h), config[["tol"]], PACKAGE="TMB")
+  L <- .Call("tmb_ichol", Permute(h), config[["tol"]], PACKAGE = "TMB")
   ## Add parallel schedule?
-  if (config[["parallel"]])
-    attr(L, "parallel_schedule") <- .Call("tmb_parallel_schedule", L, PACKAGE="TMB")
+  if (config[["parallel"]]) {
+    attr(L, "parallel_schedule") <- .Call("tmb_parallel_schedule", L, PACKAGE = "TMB")
+  }
   ## Re-do incomplete analysis
   reanalyze <- function(HT, L) {
     environment(obj$env$spHess)$ind1 <- NULL ## pattern will change
-    Lnew <- .Call("tmb_ichol", HT, config[["tol"]], PACKAGE="TMB")
-    L <- .Call("setslot", L, "i", Lnew@i, PACKAGE="TMB")
-    L <- .Call("setslot", L, "p", Lnew@p, PACKAGE="TMB")
-    L <- .Call("setslot", L, "x", Lnew@x, PACKAGE="TMB")
-    L <- .Call("setslot", L, "error", NULL, PACKAGE="TMB")
-    if (config[["parallel"]])
+    Lnew <- .Call("tmb_ichol", HT, config[["tol"]], PACKAGE = "TMB")
+    L <- .Call("setslot", L, "i", Lnew@i, PACKAGE = "TMB")
+    L <- .Call("setslot", L, "p", Lnew@p, PACKAGE = "TMB")
+    L <- .Call("setslot", L, "x", Lnew@x, PACKAGE = "TMB")
+    L <- .Call("setslot", L, "error", NULL, PACKAGE = "TMB")
+    if (config[["parallel"]]) {
       .Call("setslot", L, "parallel_schedule",
-            .Call("tmb_parallel_schedule", L, PACKAGE="TMB"), PACKAGE="TMB")
+        .Call("tmb_parallel_schedule", L, PACKAGE = "TMB"),
+        PACKAGE = "TMB"
+      )
+    }
     if (config[["trace"]]) {
-      cat(sprintf("nnz(L)=%f\n",length(L@x)))
-      cat(sprintf("Flopcount=%f\n",flopcount(L)))
+      cat(sprintf("nnz(L)=%f\n", length(L@x)))
+      cat(sprintf("Flopcount=%f\n", flopcount(L)))
     }
     NULL
   }
@@ -2055,74 +2184,79 @@ runSymbolicAnalysis2 <- function(obj, ...) {
   flopcount <- function(L) {
     cc <- diff(L@p)
     rc <- diff(Matrix::t(L)@p)
-    sum(cc*rc)
+    sum(cc * rc)
   }
   if (config[["trace"]]) {
-    cat(sprintf("nnz(L)=%f\n",length(L@x)))
-    cat(sprintf("Flopcount=%f\n",flopcount(L)))
+    cat(sprintf("nnz(L)=%f\n", length(L@x)))
+    cat(sprintf("Flopcount=%f\n", flopcount(L)))
   }
   ## Set methods and other attributes
   attr(L, "H") <- h
   attr(L, "perm") <- (perm %||% seq_len(nrow(h))) - 1L
   attr(L, "methods") <- list(
-    updateCholesky = function(L, H, t=0) {
-      if (t != 0)
+    updateCholesky = function(L, H, t = 0) {
+      if (t != 0) {
         diag(H) <- diag(H) + t
-      L <- .Call("setslot", L, "H", H, PACKAGE="TMB")
+      }
+      L <- .Call("setslot", L, "H", H, PACKAGE = "TMB")
       Hp <- Permute(H)
       get_error <- as.logical(config[["adaptive"]])
-      .Call("tmb_ichol_update", Hp, L, get_error, PACKAGE="TMB")
-      if (config[["posdef"]]) return(TRUE)
+      .Call("tmb_ichol_update", Hp, L, get_error, PACKAGE = "TMB")
+      if (config[["posdef"]]) {
+        return(TRUE)
+      }
       all(diag(L) > 0)
     },
     solveCholesky = function(L, y) {
-      H <- attr(L,"H")
+      H <- attr(L, "H")
       if (!is.null(perm)) {
         H <- Permute(H)
         y <- y[perm]
       }
-      x <- .Call("tmb_isolve", L, y, PACKAGE="TMB")
+      x <- .Call("tmb_isolve", L, y, PACKAGE = "TMB")
       for (i in seq_len(config[["maxit"]])) {
         Hx <- as.numeric(H %*% x) ## H %*% x
         error <- y - Hx
         mgc <- max(abs(error))
-        if (config[["trace"]]) print (mgc)
+        if (config[["trace"]]) print(mgc)
         if (is.finite(mgc) && mgc < config[["abstol"]]) break
         if (!is.finite(mgc)) {
           stop("Must redo symbolic analysis")
         }
-        step <- .Call("tmb_isolve", L, error, PACKAGE="TMB")
+        step <- .Call("tmb_isolve", L, error, PACKAGE = "TMB")
         if (TRUE) { ## Tune step size
-          t <- sum(error * step) / sum(step*(H%*%step))
+          t <- sum(error * step) / sum(step * (H %*% step))
           step <- t * step
         }
         x <- x + step
       }
-      if (i==config[["maxit"]]) {
-        if (config[["stop.on.error"]])
+      if (i == config[["maxit"]]) {
+        if (config[["stop.on.error"]]) {
           stop("Failed convergence with mgc=", mgc)
+        }
       }
       if (!is.null(perm)) {
         x <- x[iperm]
       }
       x
     },
-    logdet = function(L,...) {
+    logdet = function(L, ...) {
       if (config[["adaptive"]]) {
         error <- attr(L, "error") %||% 0
         if (config[["trace"]]) {
-          cat("error="); print(error)
+          cat("error=")
+          print(error)
         }
         if (error > config[["relax"]] * config[["tol"]]) {
           Hp <- Permute(attr(L, "H"))
           reanalyze(Hp, L)
         }
       }
-      list(modulus=.5*sum(log(diag(L))))
+      list(modulus = .5 * sum(log(diag(L))))
     },
     logdetHalfDeriv = function(L) {
-      ##.5 * .Call("tmb_ldl_deriv", L, PACKAGE="TMB")
-      .5 * .Call("tmb_ichol_adjoint_update", L, PACKAGE="TMB")
+      ## .5 * .Call("tmb_ldl_deriv", L, PACKAGE="TMB")
+      .5 * .Call("tmb_ichol_adjoint_update", L, PACKAGE = "TMB")
     }
   )
   ## Set Cholesky inside model object
@@ -2133,37 +2267,37 @@ runSymbolicAnalysis2 <- function(obj, ...) {
 ## url: Can be local or remote zipfile
 ## skip.top.level: Skips the top level of unzipped directory.
 install.contrib <- function(url, skip.top.level = FALSE) {
-    owd <- getwd()
-    on.exit(setwd(owd))
-    contrib.folder <- paste0(system.file("include",package="TMB"), "/contrib" )
-    if( !file.exists( contrib.folder ) ) {
-        dir.create(contrib.folder)
+  owd <- getwd()
+  on.exit(setwd(owd))
+  contrib.folder <- paste0(system.file("include", package = "TMB"), "/contrib")
+  if (!file.exists(contrib.folder)) {
+    dir.create(contrib.folder)
+  }
+  zipfile <- tempfile(fileext = ".zip")
+  if (file.exists(url)) {
+    ## Local zip file
+    file.copy(url, zipfile)
+  } else {
+    ## Remote zipfile
+    download.file(url, destfile = zipfile)
+  }
+  tmp.folder <- tempfile()
+  dir.create(tmp.folder)
+  df <- unzip(zipfile, list = TRUE)
+  unzip(zipfile, exdir = tmp.folder)
+  setwd(tmp.folder)
+  ## If unzipped archive is a single folder then strip "-master" from name
+  if (length(dir()) == 1) {
+    if (file_test("-d", dir())) {
+      file.rename(dir(), sub("-master$", "", dir()))
     }
-    zipfile <- tempfile(fileext = ".zip")
-    if(file.exists(url)) {
-        ## Local zip file
-        file.copy(url, zipfile)
-    } else {
-        ## Remote zipfile
-        download.file(url, destfile = zipfile)
-    }
-    tmp.folder <- tempfile()
-    dir.create(tmp.folder)
-    df <- unzip(zipfile, list=TRUE)
-    unzip(zipfile, exdir = tmp.folder)
-    setwd(tmp.folder)
-    ## If unzipped archive is a single folder then strip "-master" from name
-    if(length(dir()) == 1) {
-        if(file_test("-d", dir())) {
-            file.rename(dir(), sub("-master$","",dir()))
-        }
-        if(skip.top.level) setwd(dir())
-    }
-    file.copy(dir(), contrib.folder, recursive=TRUE)
-    file.remove(zipfile)
-    unlink(tmp.folder, recursive=TRUE)
-    cat("NOTE:",contrib.folder,"\n")
-    dir(contrib.folder)
+    if (skip.top.level) setwd(dir())
+  }
+  file.copy(dir(), contrib.folder, recursive = TRUE)
+  file.remove(zipfile)
+  unlink(tmp.folder, recursive = TRUE)
+  cat("NOTE:", contrib.folder, "\n")
+  dir(contrib.folder)
 }
 
 ##' Version information on API and ABI.
@@ -2172,5 +2306,5 @@ install.contrib <- function(url, skip.top.level = FALSE) {
 ##' A DLL compiled with one version of \code{TMB} can be used with another version of \code{TMB} provided that the 'ABI' is the same. We therefore define the 'ABI version' as the oldest ABI compatible version. This number can then be used to tell if re-compilation of a DLL is necessary after updating \code{TMB}.
 ##' @return List with components \code{package} (API version) and \code{abi} (ABI version) inspired by corresponding function in the \code{Matrix} package.
 TMB.Version <- function() {
-    list(package=packageVersion("TMB"), abi=abi())
+  list(package = packageVersion("TMB"), abi = abi())
 }

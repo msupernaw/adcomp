@@ -1,9 +1,9 @@
 // Copyright (C) 2013-2015 Kasper Kristensen
 // License: GPL-2
 
-/** \file 
-* \brief Interfaces to R and CppAD
-*/
+/** \file
+ * \brief Interfaces to R and CppAD
+ */
 
 /*
   Call to external C++ code can potentially result in exeptions that
@@ -23,25 +23,25 @@
 // By default we only accept 'bad_alloc' as a valid exception. Everything else => debugger !
 // Behaviour can be changed by re-defining this macro.
 #ifndef TMB_CATCH
-#define TMB_CATCH catch(std::bad_alloc& excpt)
+#define TMB_CATCH catch (std::bad_alloc & excpt)
 #endif
 // Inside the TMB_CATCH comes 'cleanup code' followed by this error
 // call (allowed to depend on the exception 'excpt')
 // Error message can be changed by re-defining this macro.
 #ifndef TMB_ERROR_BAD_ALLOC
-#define TMB_ERROR_BAD_ALLOC                             \
-Rf_error("Caught exception '%s' in function '%s'\n",    \
-         excpt.what(),                                  \
-         __FUNCTION__)
+#define TMB_ERROR_BAD_ALLOC                            \
+  Rf_error("Caught exception '%s' in function '%s'\n", \
+           excpt.what(),                               \
+           __FUNCTION__)
 #endif
 // Error call comes outside TMB_CATCH in OpenMP case (so *cannot*
 // depend on exception e.g. 'excpt')
 // Error message can be changed by re-defining this macro.
 #ifndef TMB_ERROR_BAD_THREAD_ALLOC
-#define TMB_ERROR_BAD_THREAD_ALLOC                      \
-Rf_error("Caught exception '%s' in function '%s'\n",    \
-         bad_thread_alloc,                              \
-         __FUNCTION__)
+#define TMB_ERROR_BAD_THREAD_ALLOC                     \
+  Rf_error("Caught exception '%s' in function '%s'\n", \
+           bad_thread_alloc,                           \
+           __FUNCTION__)
 #endif
 
 /* Memory manager:
@@ -53,25 +53,30 @@ Rf_error("Caught exception '%s' in function '%s'\n",    \
 extern "C" void finalizeDoubleFun(SEXP x);
 extern "C" void finalizeADFun(SEXP x);
 extern "C" void finalizeparallelADFun(SEXP x);
-extern "C" SEXP FreeADFunObject(SEXP f) CSKIP ({
+extern "C" SEXP FreeADFunObject(SEXP f) CSKIP({
   SEXP tag = R_ExternalPtrTag(f);
-  if (tag == Rf_install("DoubleFun")) {
+  if (tag == Rf_install("DoubleFun"))
+  {
     finalizeDoubleFun(f);
   }
-  else if (tag == Rf_install("ADFun")) {
+  else if (tag == Rf_install("ADFun"))
+  {
     finalizeADFun(f);
   }
-  else if (tag == Rf_install("parallelADFun")) {
+  else if (tag == Rf_install("parallelADFun"))
+  {
     finalizeparallelADFun(f);
   }
-  else {
+  else
+  {
     Rf_error("Unknown external ptr type");
   }
   R_ClearExternalPtr(f); // Set pointer to 'nil'
   return R_NilValue;
 })
-/** \internal \brief Controls the life span of objects created in the C++ template (jointly R/C++)*/
-struct memory_manager_struct {
+    /** \internal \brief Controls the life span of objects created in the C++ template (jointly R/C++)*/
+    struct memory_manager_struct
+{
   int counter;
   /** \brief External pointers 'alive', i.e. not yet garbage collected */
   std::set<SEXP> alive;
@@ -84,32 +89,37 @@ struct memory_manager_struct {
   memory_manager_struct();
 };
 #ifndef WITH_LIBTMB
-void memory_manager_struct::RegisterCFinalizer(SEXP x) {
+void memory_manager_struct::RegisterCFinalizer(SEXP x)
+{
   counter++;
   alive.insert(x);
 }
-void memory_manager_struct::CallCFinalizer(SEXP x){
+void memory_manager_struct::CallCFinalizer(SEXP x)
+{
   counter--;
   alive.erase(x);
 }
-void memory_manager_struct::clear(){
+void memory_manager_struct::clear()
+{
   std::set<SEXP>::iterator it;
-  while (alive.size() > 0) {
+  while (alive.size() > 0)
+  {
     FreeADFunObject(*alive.begin());
   }
 }
-memory_manager_struct::memory_manager_struct(){
-  counter=0;
+memory_manager_struct::memory_manager_struct()
+{
+  counter = 0;
 }
 #endif
 TMB_EXTERN memory_manager_struct memory_manager;
 
 /** \internal \brief Convert x to TMB-format for R/C++ communication
 
-   All external pointers returned from TMB should be placed in a 
+   All external pointers returned from TMB should be placed in a
    list container of length one. Additional information should be set
    as attributes to the pointer. The memory_manager_struct above knows
-   how to look up the list container given the external pointer. By 
+   how to look up the list container given the external pointer. By
    setting the list element to NULL the memory_manager can trigger the
    garbage collector (and thereby the finalizers) when the library is
    unloaded.
@@ -119,65 +129,79 @@ SEXP ptrList(SEXP x);
 #else
 SEXP ptrList(SEXP x)
 {
-  SEXP ans,names;
-  PROTECT(ans=Rf_allocVector(VECSXP,1));
-  PROTECT(names=Rf_allocVector(STRSXP,1));
-  SET_VECTOR_ELT(ans,0,x);
-  SET_STRING_ELT(names,0,Rf_mkChar("ptr"));
-  Rf_setAttrib(ans,R_NamesSymbol,names);
+  SEXP ans, names;
+  PROTECT(ans = Rf_allocVector(VECSXP, 1));
+  PROTECT(names = Rf_allocVector(STRSXP, 1));
+  SET_VECTOR_ELT(ans, 0, x);
+  SET_STRING_ELT(names, 0, Rf_mkChar("ptr"));
+  Rf_setAttrib(ans, R_NamesSymbol, names);
   memory_manager.RegisterCFinalizer(x);
   UNPROTECT(2);
   return ans;
 }
 #endif
 
-extern "C"{
+extern "C"
+{
 #ifdef LIB_UNLOAD
 #include <R_ext/Rdynload.h>
   void LIB_UNLOAD(DllInfo *dll)
   {
-    if(memory_manager.counter>0)Rprintf("Warning: %d external pointers will be removed\n",memory_manager.counter);
+    if (memory_manager.counter > 0)
+      Rprintf("Warning: %d external pointers will be removed\n", memory_manager.counter);
     memory_manager.clear();
-    for(int i=0;i<1000;i++){ // 122 seems to be sufficient.
-      if(memory_manager.counter>0){
-	R_gc();
-	R_RunExitFinalizers();
-      } else break;
+    for (int i = 0; i < 1000; i++)
+    { // 122 seems to be sufficient.
+      if (memory_manager.counter > 0)
+      {
+        R_gc();
+        R_RunExitFinalizers();
+      }
+      else
+        break;
     }
-    if(memory_manager.counter>0)Rf_error("Failed to clean. Please manually clean up before unloading\n");
+    if (memory_manager.counter > 0)
+      Rf_error("Failed to clean. Please manually clean up before unloading\n");
   }
 #endif
 }
 
 #ifdef _OPENMP
-TMB_EXTERN bool _openmp CSKIP( =true; )
+TMB_EXTERN bool _openmp CSKIP(= true;)
 #else
-TMB_EXTERN bool _openmp CSKIP( =false; )
+TMB_EXTERN bool _openmp CSKIP(= false;)
 #endif
 
-/** \internal \brief Call the optimize method of an ADFun object pointer. */
-template<class ADFunPointer>
-void optimizeTape(ADFunPointer pf){
-  if(!config.optimize.instantly){
+    /** \internal \brief Call the optimize method of an ADFun object pointer. */
+    template <class ADFunPointer>
+    void optimizeTape(ADFunPointer pf)
+{
+  if (!config.optimize.instantly)
+  {
     /* Drop out */
     return;
   }
-  if (!config.optimize.parallel){
+  if (!config.optimize.parallel)
+  {
 #ifdef _OPENMP
 #pragma omp critical
 #endif
     { /* Avoid multiple tape optimizations at the same time (to reduce memory) */
-      if(config.trace.optimize)Rcout << "Optimizing tape... ";
+      if (config.trace.optimize)
+        Rcout << "Optimizing tape... ";
       pf->optimize();
-      if(config.trace.optimize)Rcout << "Done\n";
+      if (config.trace.optimize)
+        Rcout << "Done\n";
     }
   }
   else
-    { /* Allow multiple tape optimizations at the same time */
-      if(config.trace.optimize)Rcout << "Optimizing tape... ";
-      pf->optimize();
-      if(config.trace.optimize)Rcout << "Done\n";
-    }
+  { /* Allow multiple tape optimizations at the same time */
+    if (config.trace.optimize)
+      Rcout << "Optimizing tape... ";
+    pf->optimize();
+    if (config.trace.optimize)
+      Rcout << "Done\n";
+  }
 }
 
 /* Macros to obtain data and parameters from R */
@@ -205,62 +229,66 @@ void optimizeTape(ADFunPointer pf){
     \endcode
 
     \ingroup macros */
-#define TMB_OBJECTIVE_PTR                                               \
-this
+#define TMB_OBJECTIVE_PTR \
+  this
 
 /** \brief Get parameter matrix from R and declare it as matrix<Type>
     \ingroup macros */
 #define PARAMETER_MATRIX(name)                                          \
-tmbutils::matrix<Type> name(TMB_OBJECTIVE_PTR -> fillShape(             \
-asMatrix<Type> ( TMB_OBJECTIVE_PTR -> getShape( #name, &Rf_isMatrix) ), \
-#name) );
+  tmbutils::matrix<Type> name(TMB_OBJECTIVE_PTR->fillShape(             \
+      asMatrix<Type>(TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isMatrix)), \
+      #name));
 
-/** \brief Get parameter vector from R and declare it as vector<Type> 
+/** \brief Get parameter vector from R and declare it as vector<Type>
     \ingroup macros*/
-#define PARAMETER_VECTOR(name)                                          \
-vector<Type> name(TMB_OBJECTIVE_PTR -> fillShape(                       \
-asVector<Type>(TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   )),    \
-#name));
+#define PARAMETER_VECTOR(name)                                        \
+  vector<Type> name(TMB_OBJECTIVE_PTR->fillShape(                     \
+      asVector<Type>(TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal)), \
+      #name));
 
 /** \brief Get parameter scalar from R and declare it as Type
     \ingroup macros */
-#define PARAMETER(name)                                                 \
-Type name(TMB_OBJECTIVE_PTR -> fillShape(                               \
-asVector<Type>(TMB_OBJECTIVE_PTR -> getShape(#name,&isNumericScalar)),  \
-#name)[0]);
+#define PARAMETER(name)                                                     \
+  Type name(TMB_OBJECTIVE_PTR->fillShape(                                   \
+      asVector<Type>(TMB_OBJECTIVE_PTR->getShape(#name, &isNumericScalar)), \
+      #name)[0]);
 
 /** \brief Get data vector from R and declare it as vector<Type>
     \note If name is found in the parameter list it will be read as a
     parameter vector.
     \ingroup macros */
-#define DATA_VECTOR(name)                                               \
-vector<Type> name;                                                      \
-if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR -> parameters,#name))){ \
-  name = TMB_OBJECTIVE_PTR -> fillShape(asVector<Type>(                 \
-         TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   )), #name);  \
-} else {                                                                \
-  name = asVector<Type>(getListElement(                                 \
-         TMB_OBJECTIVE_PTR -> data,#name,&Rf_isReal   ));               \
-}
+#define DATA_VECTOR(name)                                                                    \
+  vector<Type> name;                                                                         \
+  if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR->parameters, #name)))                      \
+  {                                                                                          \
+    name = TMB_OBJECTIVE_PTR->fillShape(asVector<Type>(                                      \
+                                            TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal)), \
+                                        #name);                                              \
+  }                                                                                          \
+  else                                                                                       \
+  {                                                                                          \
+    name = asVector<Type>(getListElement(                                                    \
+        TMB_OBJECTIVE_PTR->data, #name, &Rf_isReal));                                        \
+  }
 
 /** \brief Get data matrix from R and declare it as matrix<Type>
     \ingroup macros */
-#define DATA_MATRIX(name)                                               \
-matrix<Type> name(asMatrix<Type>(                                       \
-getListElement(TMB_OBJECTIVE_PTR -> data, #name, &Rf_isMatrix)));
+#define DATA_MATRIX(name)           \
+  matrix<Type> name(asMatrix<Type>( \
+      getListElement(TMB_OBJECTIVE_PTR->data, #name, &Rf_isMatrix)));
 
 /** \brief Get data scalar from R and declare it as Type
     \ingroup macros */
-#define DATA_SCALAR(name)                                               \
-Type name(asVector<Type>(getListElement(TMB_OBJECTIVE_PTR -> data,      \
-#name,&isNumericScalar))[0]);
+#define DATA_SCALAR(name)                                          \
+  Type name(asVector<Type>(getListElement(TMB_OBJECTIVE_PTR->data, \
+                                          #name, &isNumericScalar))[0]);
 
 /** \brief Get data scalar from R and declare it as int
     \note `NA` integers are not supported
     \ingroup macros */
-#define DATA_INTEGER(name) int name(CppAD::Integer(asVector<Type>(      \
-getListElement(TMB_OBJECTIVE_PTR -> data,                               \
-#name, &isNumericScalar))[0]));
+#define DATA_INTEGER(name) int name(CppAD::Integer(asVector<Type>( \
+    getListElement(TMB_OBJECTIVE_PTR->data,                        \
+                   #name, &isNumericScalar))[0]));
 
 /** \brief Get data vector of type "factor" from R and declare it as a
     zero-based integer vector.
@@ -279,29 +307,29 @@ getListElement(TMB_OBJECTIVE_PTR -> data,                               \
     [1] 0 1 2 3 4 5 6
     \endverbatim
     \ingroup macros */
-#define DATA_FACTOR(name) vector<int> name(asVector<int>(               \
-getListElement(TMB_OBJECTIVE_PTR -> data, #name, &Rf_isReal   )));
+#define DATA_FACTOR(name) vector<int> name(asVector<int>( \
+    getListElement(TMB_OBJECTIVE_PTR->data, #name, &Rf_isReal)));
 
 /** \brief Get data vector of type "integer" from R and declare it
     vector<int>. (DATA_INTEGER() is for a scalar integer)
     \note `NA` integers are not supported
     \ingroup macros */
-#define DATA_IVECTOR(name) vector<int> name(asVector<int>(              \
-getListElement(TMB_OBJECTIVE_PTR -> data, #name, &Rf_isReal   )));
+#define DATA_IVECTOR(name) vector<int> name(asVector<int>( \
+    getListElement(TMB_OBJECTIVE_PTR->data, #name, &Rf_isReal)));
 
 /** \brief Get the number of levels of a data factor from R
     \ingroup macros */
-#define NLEVELS(name)                                                   \
-LENGTH(Rf_getAttrib(getListElement(TMB_OBJECTIVE_PTR -> data, #name),   \
-Rf_install("levels")))
+#define NLEVELS(name)                                                 \
+  LENGTH(Rf_getAttrib(getListElement(TMB_OBJECTIVE_PTR->data, #name), \
+                      Rf_install("levels")))
 
 /** \brief Get sparse matrix from R and declare it as
     Eigen::SparseMatrix<Type>
     \ingroup macros */
-#define DATA_SPARSE_MATRIX(name)                                        \
-Eigen::SparseMatrix<Type> name(tmbutils::asSparseMatrix<Type>(          \
-getListElement(TMB_OBJECTIVE_PTR -> data,                               \
-#name, &isValidSparseMatrix)));
+#define DATA_SPARSE_MATRIX(name)                                 \
+  Eigen::SparseMatrix<Type> name(tmbutils::asSparseMatrix<Type>( \
+      getListElement(TMB_OBJECTIVE_PTR->data,                    \
+                     #name, &isValidSparseMatrix)));
 
 // NOTE: REPORT() constructs new SEXP so never report in parallel!
 /** \brief Report scalar, vector or array back to R without derivative
@@ -312,24 +340,24 @@ getListElement(TMB_OBJECTIVE_PTR -> data,                               \
     \note REPORT() does nothing in parallel mode (construction of
     R-objects is not allowed in parallel).
     \ingroup macros */
-#define REPORT(name)                                                    \
-if( isDouble<Type>::value &&                                            \
-    TMB_OBJECTIVE_PTR -> current_parallel_region<0 )                    \
-{                                                                       \
-    SEXP _TMB_temporary_sexp_;                                          \
-    PROTECT( _TMB_temporary_sexp_ = asSEXP(name) );                     \
-    Rf_defineVar(Rf_install(#name),                                     \
-                 _TMB_temporary_sexp_, TMB_OBJECTIVE_PTR -> report);    \
-    UNPROTECT(1);                                                       \
-}
+#define REPORT(name)                                               \
+  if (isDouble<Type>::value &&                                     \
+      TMB_OBJECTIVE_PTR->current_parallel_region < 0)              \
+  {                                                                \
+    SEXP _TMB_temporary_sexp_;                                     \
+    PROTECT(_TMB_temporary_sexp_ = asSEXP(name));                  \
+    Rf_defineVar(Rf_install(#name),                                \
+                 _TMB_temporary_sexp_, TMB_OBJECTIVE_PTR->report); \
+    UNPROTECT(1);                                                  \
+  }
 
 /** \brief Mark code that is only executed during simulation.
 
     \note SIMULATE() does nothing in parallel mode.
     \ingroup macros
 */
-#define SIMULATE                                                        \
-if(isDouble<Type>::value && TMB_OBJECTIVE_PTR -> do_simulate)
+#define SIMULATE \
+  if (isDouble<Type>::value && TMB_OBJECTIVE_PTR->do_simulate)
 
 /** \brief Report an expression (scalar, vector, matrix or array valued) back to R with derivative
     information.
@@ -337,50 +365,97 @@ if(isDouble<Type>::value && TMB_OBJECTIVE_PTR -> do_simulate)
     Typical use: obtain point estimate and standard deviation of the expression
     via the R function \c sdreport() (see details in R documentation).
     In the summary, the dimensions of the original expression is lost, and must
-    be retrieved manually. 
+    be retrieved manually.
     \warning \c ADREPORT(name) must not be used before \c name has
     been assigned a value.
     \ingroup macros */
-#define ADREPORT(name)                                                  \
-TMB_OBJECTIVE_PTR -> reportvector.push(name, #name);
+#define ADREPORT(name) \
+  TMB_OBJECTIVE_PTR->reportvector.push(name, #name);
 
-#define PARALLEL_REGION                                                 \
-if( TMB_OBJECTIVE_PTR -> parallel_region() )
+enum uncertainty_report_type
+{
+  uncertainty_report_fixed = 0,
+  uncertainty_report_random = 1,
+  uncertainty_report_derived = 2
+};
+
+/** \brief Register a fixed effect quantity for uncertainty summaries.
+
+    The quantity must correspond to a parameter object declared with a
+    PARAMETER macro. Uncertainty values are later available from
+    \code{summary(sdreport(obj), "uncertainty")}. This does not change
+    the underlying variance calculation.
+    \ingroup macros */
+#define SDREPORT_FIXED(name)                 \
+  TMB_OBJECTIVE_PTR->uncertaintyvector.push( \
+      name, #name, uncertainty_report_fixed);
+
+/** \brief Register a random effect quantity for uncertainty summaries.
+
+    The quantity must correspond to a parameter object declared with a
+    PARAMETER macro and selected as random on the R side.
+    \ingroup macros */
+#define SDREPORT_RANDOM(name)                \
+  TMB_OBJECTIVE_PTR->uncertaintyvector.push( \
+      name, #name, uncertainty_report_random);
+
+/** \brief Register a derived quantity for uncertainty summaries.
+
+    This is equivalent to \code{ADREPORT(name)} plus registration in the
+    C++ uncertainty summary slice.
+    \ingroup macros */
+#define SDREPORT_DERIVED(name)                           \
+  TMB_OBJECTIVE_PTR->uncertaintyvector.push(             \
+      name, #name, uncertainty_report_derived,           \
+      TMB_OBJECTIVE_PTR->reportvector.names.size() + 1); \
+  TMB_OBJECTIVE_PTR->reportvector.push(name, #name);
+
+/** \brief Alias for \code{SDREPORT_DERIVED}. \ingroup macros */
+#define SDREPORT(name) \
+  SDREPORT_DERIVED(name)
+
+#define PARALLEL_REGION \
+  if (TMB_OBJECTIVE_PTR->parallel_region())
 
 /** \brief Get data array from R and declare it as array<Type>
     \note If name is found in the parameter list it will be read as a
     parameter array.
     \ingroup macros*/
-#define DATA_ARRAY(name)                                                \
-tmbutils::array<Type> name;                                             \
-if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR -> parameters,#name))){ \
-  name = TMB_OBJECTIVE_PTR -> fillShape(tmbutils::asArray<Type>(        \
-         TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isArray)), #name);    \
-} else {                                                                \
-  name = tmbutils::asArray<Type>(getListElement(                        \
-         TMB_OBJECTIVE_PTR -> data, #name, &Rf_isArray));               \
-}
+#define DATA_ARRAY(name)                                                                      \
+  tmbutils::array<Type> name;                                                                 \
+  if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR->parameters, #name)))                       \
+  {                                                                                           \
+    name = TMB_OBJECTIVE_PTR->fillShape(tmbutils::asArray<Type>(                              \
+                                            TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isArray)), \
+                                        #name);                                               \
+  }                                                                                           \
+  else                                                                                        \
+  {                                                                                           \
+    name = tmbutils::asArray<Type>(getListElement(                                            \
+        TMB_OBJECTIVE_PTR->data, #name, &Rf_isArray));                                        \
+  }
 
 /** \brief Get parameter array from R and declare it as array<Type>
     \ingroup macros */
-#define PARAMETER_ARRAY(name)                                           \
-tmbutils::array<Type> name(TMB_OBJECTIVE_PTR -> fillShape(              \
-tmbutils::asArray<Type>(TMB_OBJECTIVE_PTR -> getShape(                  \
-#name, &Rf_isArray)), #name));
+#define PARAMETER_ARRAY(name)                              \
+  tmbutils::array<Type> name(TMB_OBJECTIVE_PTR->fillShape( \
+      tmbutils::asArray<Type>(TMB_OBJECTIVE_PTR->getShape( \
+          #name, &Rf_isArray)),                            \
+      #name));
 
 /** \brief Get data matrix from R and declare it as matrix<int>
     \note `NA` integers are not supported
     \ingroup macros */
-#define DATA_IMATRIX(name)                                              \
-matrix<int> name(asMatrix<int>(                                         \
-getListElement(TMB_OBJECTIVE_PTR -> data,#name, &Rf_isMatrix)));
+#define DATA_IMATRIX(name)        \
+  matrix<int> name(asMatrix<int>( \
+      getListElement(TMB_OBJECTIVE_PTR->data, #name, &Rf_isMatrix)));
 
 /** \brief Get data array from R and declare it as array<int>
     \note `NA` integers are not supported
     \ingroup macros */
-#define DATA_IARRAY(name)                                               \
-tmbutils::array<int> name(tmbutils::asArray<int>(                       \
-getListElement(TMB_OBJECTIVE_PTR -> data, #name, &Rf_isArray)));
+#define DATA_IARRAY(name)                           \
+  tmbutils::array<int> name(tmbutils::asArray<int>( \
+      getListElement(TMB_OBJECTIVE_PTR->data, #name, &Rf_isArray)));
 
 /** \brief Get string from R and declare it as std::string
 
@@ -395,22 +470,22 @@ getListElement(TMB_OBJECTIVE_PTR -> data, #name, &Rf_isArray)));
 
     \ingroup macros
 */
-#define DATA_STRING(name)                                               \
-std::string name =                                                      \
-  CHAR(STRING_ELT(getListElement(TMB_OBJECTIVE_PTR -> data, #name), 0));
+#define DATA_STRING(name) \
+  std::string name =      \
+      CHAR(STRING_ELT(getListElement(TMB_OBJECTIVE_PTR->data, #name), 0));
 
 /** \brief Get data list object from R and make it available in C++
 
 Example (incomplete) of use:
 
-In R: 
+In R:
 \code
 data <- list()
 data$object <- list(a=1:10, b=matrix(1:6,2))
-obj <- MakeADFun(data,........) 
+obj <- MakeADFun(data,........)
 \endcode
 
-In C++: 
+In C++:
 \code
 // Corresponding list object on the C++ side
 template<class Type>
@@ -433,16 +508,17 @@ Type objective_function<Type>::operator() ()
 }
 \endcode
 \ingroup macros
-*/ 
-#define DATA_STRUCT(name, struct)                                       \
-struct<Type> name(getListElement(TMB_OBJECTIVE_PTR -> data, #name));
+*/
+#define DATA_STRUCT(name, struct) \
+  struct<Type> name(getListElement(TMB_OBJECTIVE_PTR->data, #name));
 
 /** \brief Utilities for OSA residuals
     \tparam VT Can be **vector<Type>** or **array<Type>**
     \warning When extracting subsets of a `data_indicator` note that in general the subset is not applied to `cdf_lower` and `cdf_upper`.
 */
-template<class VT, class Type = typename VT::Scalar>
-struct data_indicator : VT{
+template <class VT, class Type = typename VT::Scalar>
+struct data_indicator : VT
+{
   /** \brief **Logarithm** of lower CDF */
   VT cdf_lower;
   /** \brief **Logarithm** of upper CDF */
@@ -457,54 +533,73 @@ struct data_indicator : VT{
       \param obs Observation vector or array
       \param init_one If true the data_indicator will be filled with ones signifying that all observations should be enabled.
   */
-  data_indicator(VT obs, bool init_one = false){
+  data_indicator(VT obs, bool init_one = false)
+  {
     VT::operator=(obs);
-    if (init_one) VT::fill(Type(1.0));
-    cdf_lower = obs; cdf_lower.setZero();
-    cdf_upper = obs; cdf_upper.setZero();
+    if (init_one)
+      VT::fill(Type(1.0));
+    cdf_lower = obs;
+    cdf_lower.setZero();
+    cdf_upper = obs;
+    cdf_upper.setZero();
     osa_flag = false;
   }
   /** \brief Fill with parameter vector */
-  void fill(vector<Type> p, SEXP ord_){
+  void fill(vector<Type> p, SEXP ord_)
+  {
     int n = (*this).size();
-    if(p.size() >= n  ) VT::operator=(p.segment(0, n));
-    if(p.size() >= 2*n) cdf_lower = p.segment(n, n);
-    if(p.size() >= 3*n) cdf_upper = p.segment(2 * n, n);
-    if(!Rf_isNull(ord_)) {
+    if (p.size() >= n)
+      VT::operator=(p.segment(0, n));
+    if (p.size() >= 2 * n)
+      cdf_lower = p.segment(n, n);
+    if (p.size() >= 3 * n)
+      cdf_upper = p.segment(2 * n, n);
+    if (!Rf_isNull(ord_))
+    {
       this->ord = asVector<int>(ord_);
     }
-    for (int i=0; i<p.size(); i++) {
+    for (int i = 0; i < p.size(); i++)
+    {
       osa_flag |= CppAD::Variable(p[i]);
     }
   }
   /** \brief Extract segment of indicator vector or array
       \note For this method the segment **is** applied to `cdf_lower` and `cdf_upper`. */
-  data_indicator segment(int pos, int n) {
-    data_indicator ans ( VT::segment(pos, n) );
+  data_indicator segment(int pos, int n)
+  {
+    data_indicator ans(VT::segment(pos, n));
     ans.cdf_lower = cdf_lower.segment(pos, n);
     ans.cdf_upper = cdf_upper.segment(pos, n);
-    if (ord.size() != 0) {
+    if (ord.size() != 0)
+    {
       ans.ord = ord.segment(pos, n);
     }
     ans.osa_flag = osa_flag;
     return ans;
   }
   /** \brief Get order in which the one step conditionals will be requested by oneStepPredict */
-  vector<int> order() {
+  vector<int> order()
+  {
     int n = this->size();
     vector<int> ans(n);
-    if (ord.size() == 0) {
-      for (int i=0; i<n; i++)
+    if (ord.size() == 0)
+    {
+      for (int i = 0; i < n; i++)
         ans(i) = i;
-    } else {
-      if (ord.size() != n) Rf_error("Unexpected 'ord.size() != n'");
-      std::vector<std::pair<int, int> > y(n);
-      for (int i=0; i<n; i++) {
+    }
+    else
+    {
+      if (ord.size() != n)
+        Rf_error("Unexpected 'ord.size() != n'");
+      std::vector<std::pair<int, int>> y(n);
+      for (int i = 0; i < n; i++)
+      {
         y[i].first = ord[i];
         y[i].second = i;
       }
       std::sort(y.begin(), y.end()); // sort inplace
-      for (int i=0; i<n; i++) {
+      for (int i = 0; i < n; i++)
+      {
         ans[i] = y[i].second;
       }
     }
@@ -519,98 +614,110 @@ struct data_indicator : VT{
     This is used in conjunction with one-step-ahead residuals - see
     ?oneStepPredict
     \ingroup macros */
-#define DATA_ARRAY_INDICATOR(name, obs)                                 \
-data_indicator<tmbutils::array<Type> > name(obs, true);                 \
-if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR -> parameters,#name))){ \
-  name.fill( TMB_OBJECTIVE_PTR -> fillShape(asVector<Type>(             \
-             TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   )),      \
-                                           #name),                      \
-             Rf_getAttrib(                                              \
-                TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   ),    \
-                Rf_install("ord")) );                                   \
-}
+#define DATA_ARRAY_INDICATOR(name, obs)                                                         \
+  data_indicator<tmbutils::array<Type>> name(obs, true);                                        \
+  if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR->parameters, #name)))                         \
+  {                                                                                             \
+    name.fill(TMB_OBJECTIVE_PTR->fillShape(asVector<Type>(                                      \
+                                               TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal)), \
+                                           #name),                                              \
+              Rf_getAttrib(                                                                     \
+                  TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal),                               \
+                  Rf_install("ord")));                                                          \
+  }
 
 /** \brief Declare an indicator vector 'name' of same shape as 'obs'. By default, the indicator vector is filled with ones indicating that all observations are enabled.
     \details
     This is used in conjunction with one-step-ahead residuals - see
     ?oneStepPredict
     \ingroup macros */
-#define DATA_VECTOR_INDICATOR(name, obs)                                \
-data_indicator<tmbutils::vector<Type> > name(obs, true);                \
-if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR -> parameters,#name))){ \
-  name.fill( TMB_OBJECTIVE_PTR -> fillShape(asVector<Type>(             \
-             TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   )),      \
-                                           #name),                      \
-             Rf_getAttrib(                                              \
-                TMB_OBJECTIVE_PTR -> getShape(#name, &Rf_isReal   ),    \
-                Rf_install("ord")) );                                   \
-}
+#define DATA_VECTOR_INDICATOR(name, obs)                                                        \
+  data_indicator<tmbutils::vector<Type>> name(obs, true);                                       \
+  if (!Rf_isNull(getListElement(TMB_OBJECTIVE_PTR->parameters, #name)))                         \
+  {                                                                                             \
+    name.fill(TMB_OBJECTIVE_PTR->fillShape(asVector<Type>(                                      \
+                                               TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal)), \
+                                           #name),                                              \
+              Rf_getAttrib(                                                                     \
+                  TMB_OBJECTIVE_PTR->getShape(#name, &Rf_isReal),                               \
+                  Rf_install("ord")));                                                          \
+  }
 
 // kasper: Not sure used anywhere
 /** \internal \brief Get the hessian sparsity pattern of ADFun object pointer
-\deprecated Kasper is not sure that this code is used anywhere? 
+\deprecated Kasper is not sure that this code is used anywhere?
 */
-template<class Type>
-matrix<int> HessianSparsityPattern(ADFun<Type> *pf){
-  int n=pf->Domain();
+template <class Type>
+matrix<int> HessianSparsityPattern(ADFun<Type> *pf)
+{
+  int n = pf->Domain();
   vector<bool> Px(n * n);
-  for(int i = 0; i < n; i++)
-    {
-      for(int j = 0; j < n; j++)
-	Px[ i * n + j ] = false;
-      Px[ i * n + i ] = true;
-    }
+  for (int i = 0; i < n; i++)
+  {
+    for (int j = 0; j < n; j++)
+      Px[i * n + j] = false;
+    Px[i * n + i] = true;
+  }
   pf->ForSparseJac(n, Px);
-  vector<bool> Py(1); Py[0]=true;
-  vector<int> tmp = (pf->RevSparseHes(n,Py)).template cast<int>();
+  vector<bool> Py(1);
+  Py[0] = true;
+  vector<int> tmp = (pf->RevSparseHes(n, Py)).template cast<int>();
   return asMatrix(tmp, n, n);
 }
 
 /** \internal \brief Do nothing if we are trying to tape non AD-types */
-void Independent(vector<double> x)CSKIP({})
+void Independent(vector<double> x) CSKIP({})
 
-/** \internal \brief Used by ADREPORT */
-template <class Type>
-struct report_stack{
-  std::vector<const char*> names;
-  std::vector<vector<int> > namedim;
+    /** \internal \brief Used by ADREPORT */
+    template <class Type>
+    struct report_stack
+{
+  std::vector<const char *> names;
+  std::vector<vector<int>> namedim;
   std::vector<Type> result;
-  void clear(){
+  void clear()
+  {
     names.resize(0);
     namedim.resize(0);
     result.resize(0);
   }
   // Get dimension of various object types
-  vector<int> getDim(const matrix<Type> &x) {
+  vector<int> getDim(const matrix<Type> &x)
+  {
     vector<int> dim(2);
     dim << x.rows(), x.cols();
     return dim;
   }
-  vector<int> getDim(const tmbutils::array<Type> &x) {
+  vector<int> getDim(const tmbutils::array<Type> &x)
+  {
     return x.dim;
   }
-  template<class Other> // i.e. vector or expression
-  vector<int> getDim(const Other &x) {
+  template <class Other> // i.e. vector or expression
+  vector<int> getDim(const Other &x)
+  {
     vector<int> dim(1);
     dim << x.size();
     return dim;
   }
   // push vector, matrix or array
-  template<class Vector_Matrix_Or_Array>
-  void push(Vector_Matrix_Or_Array x, const char* name) {
+  template <class Vector_Matrix_Or_Array>
+  void push(Vector_Matrix_Or_Array x, const char *name)
+  {
     names.push_back(name);
     namedim.push_back(getDim(x));
     Eigen::Array<Type, Eigen::Dynamic, Eigen::Dynamic> xa(x);
     result.insert(result.end(), xa.data(), xa.data() + x.size());
   }
   // push scalar (convert to vector case)
-  void push(Type x, const char* name){
+  void push(Type x, const char *name)
+  {
     vector<Type> xvec(1);
     xvec[0] = x;
     push(xvec, name);
   }
   // Eval: cast to vector<Type>
-  vector<Type> operator()() {
+  vector<Type> operator()()
+  {
     return result;
   }
   /* Get names (with replicates) to R */
@@ -618,12 +725,14 @@ struct report_stack{
   {
     int n = result.size();
     SEXP nam;
-    PROTECT( nam = Rf_allocVector(STRSXP, n) );
+    PROTECT(nam = Rf_allocVector(STRSXP, n));
     int k = 0;
-    for(size_t i = 0; i < names.size(); i++) {
+    for (size_t i = 0; i < names.size(); i++)
+    {
       int namelength = namedim[i].prod();
-      for(int j = 0; j < namelength; j++) {
-        SET_STRING_ELT(nam, k, Rf_mkChar(names[i]) );
+      for (int j = 0; j < namelength; j++)
+      {
+        SET_STRING_ELT(nam, k, Rf_mkChar(names[i]));
         k++;
       }
     }
@@ -631,22 +740,111 @@ struct report_stack{
     return nam;
   }
   /* Get AD reported object dims */
-  SEXP reportdims() {
+  SEXP reportdims()
+  {
     SEXP ans, nam;
-    typedef vector<vector<int> > VVI;
-    PROTECT( ans = asSEXP(VVI(namedim)) );
-    PROTECT( nam = Rf_allocVector(STRSXP, names.size()) );
-    for(size_t i = 0; i < names.size(); i++) {
+    typedef vector<vector<int>> VVI;
+    PROTECT(ans = asSEXP(VVI(namedim)));
+    PROTECT(nam = Rf_allocVector(STRSXP, names.size()));
+    for (size_t i = 0; i < names.size(); i++)
+    {
       SET_STRING_ELT(nam, i, Rf_mkChar(names[i]));
     }
     Rf_setAttrib(ans, R_NamesSymbol, nam);
     UNPROTECT(2);
     return ans;
   }
-  EIGEN_DEFAULT_DENSE_INDEX_TYPE size(){return result.size();}
-};  // report_stack
+  EIGEN_DEFAULT_DENSE_INDEX_TYPE size() { return result.size(); }
+}; // report_stack
 
-extern "C" {
+/** \internal \brief Used by SDREPORT_* macros */
+template <class Type>
+struct uncertainty_stack
+{
+  std::vector<const char *> names;
+  std::vector<vector<int>> namedim;
+  std::vector<int> types;
+  std::vector<int> report_index;
+  void clear()
+  {
+    names.resize(0);
+    namedim.resize(0);
+    types.resize(0);
+    report_index.resize(0);
+  }
+  vector<int> getDim(const matrix<Type> &x)
+  {
+    vector<int> dim(2);
+    dim << x.rows(), x.cols();
+    return dim;
+  }
+  vector<int> getDim(const tmbutils::array<Type> &x)
+  {
+    return x.dim;
+  }
+  template <class Other>
+  vector<int> getDim(const Other &x)
+  {
+    vector<int> dim(1);
+    dim << x.size();
+    return dim;
+  }
+  template <class Vector_Matrix_Or_Array>
+  void push(Vector_Matrix_Or_Array x, const char *name, int type, int report_idx = 0)
+  {
+    names.push_back(name);
+    namedim.push_back(getDim(x));
+    types.push_back(type);
+    report_index.push_back(report_idx);
+  }
+  void push(Type x, const char *name, int type, int report_idx = 0)
+  {
+    vector<Type> xvec(1);
+    xvec[0] = x;
+    push(xvec, name, type, report_idx);
+  }
+  SEXP info()
+  {
+    SEXP ans, dim, nam, type, report_idx, ans_names;
+    typedef vector<vector<int>> VVI;
+    PROTECT(ans = Rf_allocVector(VECSXP, 4));
+    PROTECT(nam = Rf_allocVector(STRSXP, names.size()));
+    PROTECT(dim = asSEXP(VVI(namedim)));
+    PROTECT(type = Rf_allocVector(STRSXP, types.size()));
+    PROTECT(report_idx = Rf_allocVector(INTSXP, report_index.size()));
+    for (size_t i = 0; i < names.size(); i++)
+    {
+      SET_STRING_ELT(nam, i, Rf_mkChar(names[i]));
+    }
+    for (size_t i = 0; i < types.size(); i++)
+    {
+      const char *label = "derived";
+      if (types[i] == uncertainty_report_fixed)
+        label = "fixed";
+      if (types[i] == uncertainty_report_random)
+        label = "random";
+      SET_STRING_ELT(type, i, Rf_mkChar(label));
+      INTEGER(report_idx)
+      [i] = report_index[i];
+    }
+    SET_VECTOR_ELT(ans, 0, nam);
+    SET_VECTOR_ELT(ans, 1, dim);
+    SET_VECTOR_ELT(ans, 2, type);
+    SET_VECTOR_ELT(ans, 3, report_idx);
+    PROTECT(ans_names = Rf_allocVector(STRSXP, 4));
+    SET_STRING_ELT(ans_names, 0, Rf_mkChar("names"));
+    SET_STRING_ELT(ans_names, 1, Rf_mkChar("dims"));
+    SET_STRING_ELT(ans_names, 2, Rf_mkChar("types"));
+    SET_STRING_ELT(ans_names, 3, Rf_mkChar("reportIndex"));
+    Rf_setAttrib(ans, R_NamesSymbol, ans_names);
+    UNPROTECT(6);
+    return ans;
+  }
+  EIGEN_DEFAULT_DENSE_INDEX_TYPE size() { return names.size(); }
+}; // uncertainty_stack
+
+extern "C"
+{
   void GetRNGstate(void);
   void PutRNGstate(void);
 }
@@ -655,78 +853,88 @@ extern "C" {
 template <class Type>
 class objective_function
 {
-// private:
+  // private:
 public:
   SEXP data;
   SEXP parameters;
   SEXP report;
-  
-  int index;
-  vector<Type> theta; /**< \brief Consists of unlist(parameters_)*/ 
-  vector<const char*> thetanames; /**< \brief In R notation: names(theta). Contains repeated values*/ 
-  report_stack<Type> reportvector; /**< \brief Used by "ADREPORT" */
-  bool reversefill; // used to find the parameter order in user template (not anymore - use pushParname instead)
-  vector<const char*> parnames; /**< \brief One name for each PARAMETER_ in user template */
 
-/** \brief Called once for each occurance of PARAMETER_ */
-  void pushParname(const char* x){
-    parnames.conservativeResize(parnames.size()+1);
-    parnames[parnames.size()-1]=x;
+  int index;
+  vector<Type> theta;                        /**< \brief Consists of unlist(parameters_)*/
+  vector<const char *> thetanames;           /**< \brief In R notation: names(theta). Contains repeated values*/
+  report_stack<Type> reportvector;           /**< \brief Used by "ADREPORT" */
+  uncertainty_stack<Type> uncertaintyvector; /**< \brief Used by "SDREPORT_*" */
+  bool reversefill;                          // used to find the parameter order in user template (not anymore - use pushParname instead)
+  vector<const char *> parnames;             /**< \brief One name for each PARAMETER_ in user template */
+
+  /** \brief Called once for each occurance of PARAMETER_ */
+  void pushParname(const char *x)
+  {
+    parnames.conservativeResize(parnames.size() + 1);
+    parnames[parnames.size() - 1] = x;
   }
 
   /* ================== For parallel Hessian computation
      Need three different parallel evaluation modes:
-     (1) *Parallel mode* where a parallel region is evaluated iff 
+     (1) *Parallel mode* where a parallel region is evaluated iff
          current_parallel_region == selected_parallel_region
-     (2) *Serial mode* where all parallel region tests are evaluated 
+     (2) *Serial mode* where all parallel region tests are evaluated
          to TRUE so that "PARALLEL_REGION" tests are effectively removed.
-	 A negative value of "current_parallel_region" or "selected_parallel_region" 
-	 is used to select this mode (the default).
+   A negative value of "current_parallel_region" or "selected_parallel_region"
+   is used to select this mode (the default).
      (3) *Count region mode* where statements inside "PARALLEL_REGION{...}"
          are *ignored* and "current_parallel_region" is increased by one each
-	 time a parallel region is visited.
+   time a parallel region is visited.
      NOTE: The macro "PARALLEL_REGION" is supposed to be defined as
            #define PARALLEL_REGION if(this->parallel_region())
-	   where the function "parallel_region" does the book keeping.
+     where the function "parallel_region" does the book keeping.
    */
   bool parallel_ignore_statements;
-  int current_parallel_region;       /* Identifier of a code-fragment of user template */
-  int selected_parallel_region;      /* Consider _this_ code-fragment */
-  int max_parallel_regions;          /* Max number of parallel region identifiers,
-				        e.g. max_parallel_regions=config.nthreads;
-				        probably best in most cases. */
-  bool parallel_region(){            /* Is this the selected parallel region ? */
+  int current_parallel_region;  /* Identifier of a code-fragment of user template */
+  int selected_parallel_region; /* Consider _this_ code-fragment */
+  int max_parallel_regions;     /* Max number of parallel region identifiers,
+           e.g. max_parallel_regions=config.nthreads;
+           probably best in most cases. */
+  bool parallel_region()
+  { /* Is this the selected parallel region ? */
     bool ans;
-    if(config.autopar || current_parallel_region<0 || selected_parallel_region<0)return true; /* Serial mode */
-    ans = (selected_parallel_region==current_parallel_region) && (!parallel_ignore_statements);
+    if (config.autopar || current_parallel_region < 0 || selected_parallel_region < 0)
+      return true; /* Serial mode */
+    ans = (selected_parallel_region == current_parallel_region) && (!parallel_ignore_statements);
     current_parallel_region++;
-    if(max_parallel_regions>0)current_parallel_region=current_parallel_region % max_parallel_regions;
+    if (max_parallel_regions > 0)
+      current_parallel_region = current_parallel_region % max_parallel_regions;
     return ans;
   }
   /* Note: Some other functions rely on "count_parallel_regions" to run through the users code (!) */
-  int count_parallel_regions(){
-    current_parallel_region=0;       /* reset counter */
-    selected_parallel_region=0;
-    parallel_ignore_statements=true; /* Do not evaluate stuff inside PARALLEL_REGION{...} */
-    this->operator()();              /* Run through users code */
-    if (config.autopar) return 0;
-    if(max_parallel_regions>0)return max_parallel_regions;
+  int count_parallel_regions()
+  {
+    current_parallel_region = 0; /* reset counter */
+    selected_parallel_region = 0;
+    parallel_ignore_statements = true; /* Do not evaluate stuff inside PARALLEL_REGION{...} */
+    this->operator()();                /* Run through users code */
+    if (config.autopar)
+      return 0;
+    if (max_parallel_regions > 0)
+      return max_parallel_regions;
     else
-    return current_parallel_region;
+      return current_parallel_region;
   }
-  void set_parallel_region(int i){   /* Select parallel region (from within openmp loop) */
-    current_parallel_region=0;
-    selected_parallel_region=i;
-    parallel_ignore_statements=false;
+  void set_parallel_region(int i)
+  { /* Select parallel region (from within openmp loop) */
+    current_parallel_region = 0;
+    selected_parallel_region = i;
+    parallel_ignore_statements = false;
   }
 
-  bool do_simulate;   /** \brief Flag set when in simulation mode */
-  void set_simulate(bool do_simulate_) {
+  bool do_simulate; /** \brief Flag set when in simulation mode */
+  void set_simulate(bool do_simulate_)
+  {
     do_simulate = do_simulate_;
   }
 
   /* data_ and parameters_ are R-lists containing R-vectors or R-matrices.
-     report_ is an R-environment.  
+     report_ is an R-environment.
      The elements of the vector "unlist(parameters_)" are filled into "theta"
      which contains the default parameter-values. This happens during the
      *construction* of the objective_function object.
@@ -735,31 +943,33 @@ public:
      ADFun-object.
   */
   /** \brief Constructor which among other things gives a value to "theta" */
-  objective_function(SEXP data, SEXP parameters, SEXP report) :
-    data(data), parameters(parameters), report(report), index(0)
+  objective_function(SEXP data, SEXP parameters, SEXP report) : data(data), parameters(parameters), report(report), index(0)
   {
-    /* Fill theta with the default parameters. 
+    /* Fill theta with the default parameters.
        Pass R-matrices column major. */
     theta.resize(nparms(parameters));
     int length_parlist = Rf_length(parameters);
-    for(int i = 0, counter = 0; i < length_parlist; i++) {
+    for (int i = 0, counter = 0; i < length_parlist; i++)
+    {
       // x = parameters[[i]]
       SEXP x = VECTOR_ELT(parameters, i);
       int nx = Rf_length(x);
-      double* px = REAL(x);
-      for(int j = 0; j < nx; j++) {
-        theta[counter++] = Type( px[j] );
+      double *px = REAL(x);
+      for (int j = 0; j < nx; j++)
+      {
+        theta[counter++] = Type(px[j]);
       }
     }
     thetanames.resize(theta.size());
-    for(int i=0;i<thetanames.size();i++)thetanames[i]="";
-    current_parallel_region=-1;
-    selected_parallel_region=-1;
-    max_parallel_regions=-1;
+    for (int i = 0; i < thetanames.size(); i++)
+      thetanames[i] = "";
+    current_parallel_region = -1;
+    selected_parallel_region = -1;
+    max_parallel_regions = -1;
 #ifdef _OPENMP
-      max_parallel_regions = config.nthreads;
+    max_parallel_regions = config.nthreads;
 #endif
-    reversefill=false;
+    reversefill = false;
     do_simulate = false;
     GetRNGstate(); /* Read random seed from R. Note: by default we do
                       not write the seed back to R *after*
@@ -772,7 +982,8 @@ public:
   }
 
   /** \brief Syncronize user's data object. It could be changed between calls to e.g. EvalDoubleFunObject */
-  void sync_data() {
+  void sync_data()
+  {
     SEXP env = R_ParentEnv(this->report);
     this->data = tmb_getVar(Rf_install("data"), env);
   }
@@ -780,17 +991,19 @@ public:
   /** \brief Extract theta vector from objetive function object */
   SEXP defaultpar()
   {
-    int n=theta.size();
+    int n = theta.size();
     SEXP res;
     SEXP nam;
-    PROTECT(res=Rf_allocVector(REALSXP,n));
-    PROTECT(nam=Rf_allocVector(STRSXP,n));
-    for(int i=0;i<n;i++){
-      //REAL(res)[i]=CppAD::Value(theta[i]);
-      REAL(res)[i]=value(theta[i]);
-      SET_STRING_ELT(nam,i,Rf_mkChar(thetanames[i]));
+    PROTECT(res = Rf_allocVector(REALSXP, n));
+    PROTECT(nam = Rf_allocVector(STRSXP, n));
+    for (int i = 0; i < n; i++)
+    {
+      // REAL(res)[i]=CppAD::Value(theta[i]);
+      REAL(res)
+      [i] = value(theta[i]);
+      SET_STRING_ELT(nam, i, Rf_mkChar(thetanames[i]));
     }
-    Rf_setAttrib(res,R_NamesSymbol,nam);
+    Rf_setAttrib(res, R_NamesSymbol, nam);
     UNPROTECT(2);
     return res;
   }
@@ -798,17 +1011,18 @@ public:
   /** \brief Extract parnames vector from objetive function object */
   SEXP parNames()
   {
-    int n=parnames.size();
+    int n = parnames.size();
     SEXP nam;
-    PROTECT(nam=Rf_allocVector(STRSXP,n));
-    for(int i=0;i<n;i++){
-      SET_STRING_ELT(nam,i,Rf_mkChar(parnames[i]));
+    PROTECT(nam = Rf_allocVector(STRSXP, n));
+    for (int i = 0; i < n; i++)
+    {
+      SET_STRING_ELT(nam, i, Rf_mkChar(parnames[i]));
     }
     UNPROTECT(1);
     return nam;
   }
-  
-  /* FIXME: "Value" should be "var2par" I guess 
+
+  /* FIXME: "Value" should be "var2par" I guess
      kasper: Why not use asDouble defined previously? */
   /** @name Value Functions
       Overloaded functions to extract the value from objects of various types;
@@ -819,22 +1033,24 @@ public:
   \param x The variable to be extracted.
   \return Object of type double containing the value of the argument.
   */
-  double value(double x){return x;}
-  double value(AD<double> x){return CppAD::Value(x);}
-  double value(AD<AD<double> > x){return CppAD::Value(CppAD::Value(x));}
-  double value(AD<AD<AD<double> > > x){return CppAD::Value(CppAD::Value(CppAD::Value(x)));}
+  double value(double x) { return x; }
+  double value(AD<double> x) { return CppAD::Value(x); }
+  double value(AD<AD<double>> x) { return CppAD::Value(CppAD::Value(x)); }
+  double value(AD<AD<AD<double>>> x) { return CppAD::Value(CppAD::Value(CppAD::Value(x))); }
 #ifdef TMBAD_FRAMEWORK
-  double value(TMBad::ad_aug x){return x.Value();}
+  double value(TMBad::ad_aug x) { return x.Value(); }
 #endif
   /** @} */
 
   /** \brief Find the length of theta, i.e. in application obj=parameters */
   int nparms(SEXP obj)
   {
-    int count=0;
-    for(int i=0;i<Rf_length(obj);i++){
-      if(!Rf_isReal(VECTOR_ELT(obj,i)))Rf_error("PARAMETER COMPONENT NOT A VECTOR!");
-      count+=Rf_length(VECTOR_ELT(obj,i));
+    int count = 0;
+    for (int i = 0; i < Rf_length(obj); i++)
+    {
+      if (!Rf_isReal(VECTOR_ELT(obj, i)))
+        Rf_error("PARAMETER COMPONENT NOT A VECTOR!");
+      count += Rf_length(VECTOR_ELT(obj, i));
     }
     return count;
   }
@@ -844,84 +1060,114 @@ public:
   void fill(vector<Type> &x, const char *nam)
   {
     pushParname(nam);
-    for(int i=0;i<x.size();i++){
-      thetanames[index]=nam;
-      if(reversefill)theta[index++]=x[i];else x[i]=theta[index++];
+    for (int i = 0; i < x.size(); i++)
+    {
+      thetanames[index] = nam;
+      if (reversefill)
+        theta[index++] = x[i];
+      else
+        x[i] = theta[index++];
     }
   }
   void fill(matrix<Type> &x, const char *nam)
   {
     pushParname(nam);
-    for(int j=0;j<x.cols();j++){
-      for(int i=0;i<x.rows();i++){
-	thetanames[index]=nam;
-	if(reversefill)theta[index++]=x(i,j);else x(i,j)=theta[index++];
+    for (int j = 0; j < x.cols(); j++)
+    {
+      for (int i = 0; i < x.rows(); i++)
+      {
+        thetanames[index] = nam;
+        if (reversefill)
+          theta[index++] = x(i, j);
+        else
+          x(i, j) = theta[index++];
       }
     }
   }
-  template<class ArrayType>
+  template <class ArrayType>
   void fill(ArrayType &x, const char *nam)
   {
     pushParname(nam);
-    for(int i=0;i<x.size();i++){
-	thetanames[index]=nam;
-	if(reversefill)theta[index++]=x[i];else x[i]=theta[index++];
+    for (int i = 0; i < x.size(); i++)
+    {
+      thetanames[index] = nam;
+      if (reversefill)
+        theta[index++] = x[i];
+      else
+        x[i] = theta[index++];
     }
   }
 
   /* Experiment: new map feature - currently arrays only */
-  template<class ArrayType>
+  template <class ArrayType>
   void fillmap(ArrayType &x, const char *nam)
   {
     pushParname(nam);
-    SEXP elm=getListElement(parameters,nam);
-    int* map=INTEGER(Rf_getAttrib(elm,Rf_install("map")));
-    int  nlevels=INTEGER(Rf_getAttrib(elm,Rf_install("nlevels")))[0];
-    for(int i=0;i<x.size();i++){
-      if(map[i]>=0){
-	thetanames[index+map[i]]=nam;
-	if(reversefill)theta[index+map[i]]=x(i);else x(i)=theta[index+map[i]];
+    SEXP elm = getListElement(parameters, nam);
+    int *map = INTEGER(Rf_getAttrib(elm, Rf_install("map")));
+    int nlevels = INTEGER(Rf_getAttrib(elm, Rf_install("nlevels")))[0];
+    for (int i = 0; i < x.size(); i++)
+    {
+      if (map[i] >= 0)
+      {
+        thetanames[index + map[i]] = nam;
+        if (reversefill)
+          theta[index + map[i]] = x(i);
+        else
+          x(i) = theta[index + map[i]];
       }
     }
-    index+=nlevels;
+    index += nlevels;
   }
   // Auto detect whether we are in "map-mode"
-  SEXP getShape(const char *nam, RObjectTester expectedtype=NULL){
-    SEXP elm=getListElement(parameters,nam);
-    SEXP shape=Rf_getAttrib(elm,Rf_install("shape"));
+  SEXP getShape(const char *nam, RObjectTester expectedtype = NULL)
+  {
+    SEXP elm = getListElement(parameters, nam);
+    SEXP shape = Rf_getAttrib(elm, Rf_install("shape"));
     SEXP ans;
-    if(shape==R_NilValue)ans=elm; else ans=shape;
+    if (shape == R_NilValue)
+      ans = elm;
+    else
+      ans = shape;
     RObjectTestExpectedType(ans, expectedtype, nam);
     return ans;
   }
-  template<class ArrayType>
-  //ArrayType fillShape(ArrayType &x, const char *nam){
-  ArrayType fillShape(ArrayType x, const char *nam){
-    SEXP elm=getListElement(parameters,nam);
-    SEXP shape=Rf_getAttrib(elm,Rf_install("shape"));
-    if(shape==R_NilValue)fill(x,nam);
-    else fillmap(x,nam);
+  template <class ArrayType>
+  // ArrayType fillShape(ArrayType &x, const char *nam){
+  ArrayType fillShape(ArrayType x, const char *nam)
+  {
+    SEXP elm = getListElement(parameters, nam);
+    SEXP shape = Rf_getAttrib(elm, Rf_install("shape"));
+    if (shape == R_NilValue)
+      fill(x, nam);
+    else
+      fillmap(x, nam);
     return x;
   }
 
   void fill(Type &x, char const *nam)
   {
     pushParname(nam);
-    thetanames[index]=nam;
-    if(reversefill)theta[index++]=x;else x=theta[index++];
+    thetanames[index] = nam;
+    if (reversefill)
+      theta[index++] = x;
+    else
+      x = theta[index++];
   }
-   
-  Type operator() ();
 
-  Type evalUserTemplate(){
-    Type ans=this->operator()();
+  Type operator()();
+
+  Type evalUserTemplate()
+  {
+    Type ans = this->operator()();
     /* After evaluating the template, "index" should be equal to the length of "theta".
        If not, we assume that the "epsilon method" has been requested from R, I.e.
        that the un-used theta parameters are reserved for an inner product contribution
        with the numbers reported via ADREPORT. */
-    if(index != theta.size()){
-      PARAMETER_VECTOR( TMB_epsilon_ );
-      ans += ( this->reportvector() * TMB_epsilon_ ).sum();
+    if (index != theta.size())
+    {
+      PARAMETER_VECTOR(TMB_epsilon_);
+      ans += (this->reportvector() * TMB_epsilon_).sum();
     }
     return ans;
   }
@@ -957,85 +1203,103 @@ public:
 
     \ingroup parallel
 */
-template<class Type>
-struct parallel_accumulator{
+template <class Type>
+struct parallel_accumulator
+{
   Type result;
-  objective_function<Type>* obj;
-  parallel_accumulator(objective_function<Type>* obj_){
-    result=Type(0);
-    obj=obj_;
+  objective_function<Type> *obj;
+  parallel_accumulator(objective_function<Type> *obj_)
+  {
+    result = Type(0);
+    obj = obj_;
 #ifdef _OPENMP
-    obj->max_parallel_regions=config.nthreads;
+    obj->max_parallel_regions = config.nthreads;
 #endif
   }
-  inline void operator+=(Type x){
-    if(obj->parallel_region())result+=x;
+  inline void operator+=(Type x)
+  {
+    if (obj->parallel_region())
+      result += x;
   }
-  inline void operator-=(Type x){
-    if(obj->parallel_region())result-=x;
+  inline void operator-=(Type x)
+  {
+    if (obj->parallel_region())
+      result -= x;
   }
-  operator Type(){
+  operator Type()
+  {
     return result;
   }
 };
 
-
 #ifndef WITH_LIBTMB
 
 #ifdef TMBAD_FRAMEWORK
-template<class ADFunType>
+template <class ADFunType>
 SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
 {
-  if(!Rf_isNewList(control))Rf_error("'control' must be a list");
-  ADFunType* pf;
-  pf=(ADFunType*)R_ExternalPtrAddr(f);
+  if (!Rf_isNewList(control))
+    Rf_error("'control' must be a list");
+  ADFunType *pf;
+  pf = (ADFunType *)R_ExternalPtrAddr(f);
   int data_changed = getListInteger(control, "data_changed", 0);
-  if (data_changed) {
+  if (data_changed)
+  {
     pf->force_update();
   }
   int set_tail = getListInteger(control, "set_tail", 0) - 1;
-  if (set_tail == -1) {
-    pf -> unset_tail();
-  } else {
-    std::vector<TMBad::Index> r(1, set_tail);
-    pf -> set_tail(r);
+  if (set_tail == -1)
+  {
+    pf->unset_tail();
   }
-  PROTECT(theta=Rf_coerceVector(theta,REALSXP));
-  int n=pf->Domain();
-  int m=pf->Range();
-  if(LENGTH(theta)!=n)Rf_error("Wrong parameter length.");
-  //R-index -> C-index
+  else
+  {
+    std::vector<TMBad::Index> r(1, set_tail);
+    pf->set_tail(r);
+  }
+  PROTECT(theta = Rf_coerceVector(theta, REALSXP));
+  int n = pf->Domain();
+  int m = pf->Range();
+  if (LENGTH(theta) != n)
+    Rf_error("Wrong parameter length.");
+  // R-index -> C-index
   int rangecomponent = getListInteger(control, "rangecomponent", 1) - 1;
-  if(!((0<=rangecomponent)&(rangecomponent<=m-1)))
+  if (!((0 <= rangecomponent) & (rangecomponent <= m - 1)))
     Rf_error("Wrong range component.");
   int order = getListInteger(control, "order");
-  if((order!=0) & (order!=1) & (order!=2) & (order!=3))
+  if ((order != 0) & (order != 1) & (order != 2) & (order != 3))
     Rf_error("order can be 0, 1, 2 or 3");
-  //int sparsitypattern = getListInteger(control, "sparsitypattern");
-  //int dumpstack = getListInteger(control, "dumpstack");
+  // int sparsitypattern = getListInteger(control, "sparsitypattern");
+  // int dumpstack = getListInteger(control, "dumpstack");
   SEXP hessiancols; // Hessian columns
-  PROTECT(hessiancols=getListElement(control,"hessiancols"));
-  int ncols=Rf_length(hessiancols);
+  PROTECT(hessiancols = getListElement(control, "hessiancols"));
+  int ncols = Rf_length(hessiancols);
   SEXP hessianrows; // Hessian rows
-  PROTECT(hessianrows=getListElement(control,"hessianrows"));
-  int nrows=Rf_length(hessianrows);
-  if((nrows>0)&(nrows!=ncols))Rf_error("hessianrows and hessianrows must have same length");
+  PROTECT(hessianrows = getListElement(control, "hessianrows"));
+  int nrows = Rf_length(hessianrows);
+  if ((nrows > 0) & (nrows != ncols))
+    Rf_error("hessianrows and hessianrows must have same length");
   vector<size_t> cols(ncols);
   vector<size_t> cols0(ncols);
   vector<size_t> rows(nrows);
-  if(ncols>0){
-    for(int i=0;i<ncols;i++){
-      cols[i]=INTEGER(hessiancols)[i]-1; //R-index -> C-index
-      cols0[i]=0;
-      if(nrows>0)rows[i]=INTEGER(hessianrows)[i]-1; //R-index -> C-index
+  if (ncols > 0)
+  {
+    for (int i = 0; i < ncols; i++)
+    {
+      cols[i] = INTEGER(hessiancols)[i] - 1; // R-index -> C-index
+      cols0[i] = 0;
+      if (nrows > 0)
+        rows[i] = INTEGER(hessianrows)[i] - 1; // R-index -> C-index
     }
   }
   std::vector<double> x(REAL(theta), REAL(theta) + LENGTH(theta));
 
-  SEXP res=R_NilValue;
-  SEXP rangeweight=getListElement(control,"rangeweight");
-  if(rangeweight!=R_NilValue){
-    if(LENGTH(rangeweight)!=m)Rf_error("rangeweight must have length equal to range dimension");
+  SEXP res = R_NilValue;
+  SEXP rangeweight = getListElement(control, "rangeweight");
+  if (rangeweight != R_NilValue)
+  {
+    if (LENGTH(rangeweight) != m)
+      Rf_error("rangeweight must have length equal to range dimension");
     std::vector<double> w(REAL(rangeweight),
                           REAL(rangeweight) + LENGTH(rangeweight));
     vector<double> ans = pf->Jacobian(x, w);
@@ -1043,7 +1307,8 @@ SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
     UNPROTECT(3);
     return res;
   }
-  if(order==3){
+  if (order == 3)
+  {
     Rf_error("Not implemented for TMBad");
     // vector<double> w(1);
     // w[0]=1;
@@ -1051,51 +1316,62 @@ SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
     // pf->ForTwo(x,rows,cols); /* Compute forward directions */
     // PROTECT(res=asSEXP(asMatrix(pf->Reverse(3,w),n,3)));
   }
-  if(order==0){
-    //if(dumpstack)CppAD::traceforward0sweep(1);
+  if (order == 0)
+  {
+    // if(dumpstack)CppAD::traceforward0sweep(1);
     std::vector<double> ans = pf->operator()(x);
-    PROTECT(res=asSEXP(ans));
-    //if(dumpstack)CppAD::traceforward0sweep(0);
-    SEXP rangenames=Rf_getAttrib(f,Rf_install("range.names"));
-    if(LENGTH(res)==LENGTH(rangenames)){
-      Rf_setAttrib(res,R_NamesSymbol,rangenames);
+    PROTECT(res = asSEXP(ans));
+    // if(dumpstack)CppAD::traceforward0sweep(0);
+    SEXP rangenames = Rf_getAttrib(f, Rf_install("range.names"));
+    if (LENGTH(res) == LENGTH(rangenames))
+    {
+      Rf_setAttrib(res, R_NamesSymbol, rangenames);
     }
   }
-  if(order==1){
+  if (order == 1)
+  {
     std::vector<double> jvec;
     SEXP keepx = getListElement(control, "keepx");
-    if (keepx != R_NilValue && LENGTH(keepx) > 0) {
+    if (keepx != R_NilValue && LENGTH(keepx) > 0)
+    {
       SEXP keepy = getListElement(control, "keepy");
       std::vector<bool> keep_x(pf->Domain(), false);
       std::vector<bool> keep_y(pf->Range(), false);
-      for (int i=0; i<LENGTH(keepx); i++) {
+      for (int i = 0; i < LENGTH(keepx); i++)
+      {
         keep_x[INTEGER(keepx)[i] - 1] = true;
       }
-      for (int i=0; i<LENGTH(keepy); i++) {
+      for (int i = 0; i < LENGTH(keepy); i++)
+      {
         keep_y[INTEGER(keepy)[i] - 1] = true;
       }
       n = LENGTH(keepx);
       m = LENGTH(keepy);
       jvec = pf->Jacobian(x, keep_x, keep_y);
-    } else {
+    }
+    else
+    {
       jvec = pf->Jacobian(x);
     }
     // if(doforward)pf->Forward(0,x);
     matrix<double> jac(m, n);
-    int k=0;
-    for (int i=0; i<m; i++) {
-      for (int j=0; j<n; j++) {
+    int k = 0;
+    for (int i = 0; i < m; i++)
+    {
+      for (int j = 0; j < n; j++)
+      {
         jac(i, j) = jvec[k];
         k++;
       }
     }
-    PROTECT( res = asSEXP(jac) );
+    PROTECT(res = asSEXP(jac));
   }
-  //if(order==2)res=asSEXP(pf->Hessian(x,0),1);
-  if(order==2){
+  // if(order==2)res=asSEXP(pf->Hessian(x,0),1);
+  if (order == 2)
+  {
     // if(ncols==0){
     //   if(sparsitypattern){
-    //     PROTECT(res=asSEXP(HessianSparsityPattern(pf)));  
+    //     PROTECT(res=asSEXP(HessianSparsityPattern(pf)));
     //   } else {
     //     PROTECT(res=asSEXP(asMatrix(pf->Hessian(x,rangecomponent),n,n)));
     //   }
@@ -1146,97 +1422,123 @@ SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
    All other usage is considered deprecated/experimental and may be removed in the future.
 
 */
-template<class ADFunType>
+template <class ADFunType>
 SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
 {
-  if(!Rf_isNewList(control))Rf_error("'control' must be a list");
-  ADFunType* pf;
-  pf=(ADFunType*)R_ExternalPtrAddr(f);
-  PROTECT(theta=Rf_coerceVector(theta,REALSXP));
-  int n=pf->Domain();
-  int m=pf->Range();
-  if(LENGTH(theta)!=n)Rf_error("Wrong parameter length.");
+  if (!Rf_isNewList(control))
+    Rf_error("'control' must be a list");
+  ADFunType *pf;
+  pf = (ADFunType *)R_ExternalPtrAddr(f);
+  PROTECT(theta = Rf_coerceVector(theta, REALSXP));
+  int n = pf->Domain();
+  int m = pf->Range();
+  if (LENGTH(theta) != n)
+    Rf_error("Wrong parameter length.");
   // Do forwardsweep ?
   int doforward = getListInteger(control, "doforward", 1);
-  //R-index -> C-index
+  // R-index -> C-index
   int rangecomponent = getListInteger(control, "rangecomponent", 1) - 1;
-  if(!((0<=rangecomponent)&(rangecomponent<=m-1)))
+  if (!((0 <= rangecomponent) & (rangecomponent <= m - 1)))
     Rf_error("Wrong range component.");
   int order = getListInteger(control, "order");
-  if((order!=0) & (order!=1) & (order!=2) & (order!=3))
+  if ((order != 0) & (order != 1) & (order != 2) & (order != 3))
     Rf_error("order can be 0, 1, 2 or 3");
   int sparsitypattern = getListInteger(control, "sparsitypattern");
   int dumpstack = getListInteger(control, "dumpstack");
   SEXP hessiancols; // Hessian columns
-  PROTECT(hessiancols=getListElement(control,"hessiancols"));
-  int ncols=Rf_length(hessiancols);
+  PROTECT(hessiancols = getListElement(control, "hessiancols"));
+  int ncols = Rf_length(hessiancols);
   SEXP hessianrows; // Hessian rows
-  PROTECT(hessianrows=getListElement(control,"hessianrows"));
-  int nrows=Rf_length(hessianrows);
-  if((nrows>0)&(nrows!=ncols))Rf_error("hessianrows and hessianrows must have same length");
+  PROTECT(hessianrows = getListElement(control, "hessianrows"));
+  int nrows = Rf_length(hessianrows);
+  if ((nrows > 0) & (nrows != ncols))
+    Rf_error("hessianrows and hessianrows must have same length");
   vector<size_t> cols(ncols);
   vector<size_t> cols0(ncols);
   vector<size_t> rows(nrows);
-  if(ncols>0){
-    for(int i=0;i<ncols;i++){
-      cols[i]=INTEGER(hessiancols)[i]-1; //R-index -> C-index
-      cols0[i]=0;
-      if(nrows>0)rows[i]=INTEGER(hessianrows)[i]-1; //R-index -> C-index
+  if (ncols > 0)
+  {
+    for (int i = 0; i < ncols; i++)
+    {
+      cols[i] = INTEGER(hessiancols)[i] - 1; // R-index -> C-index
+      cols0[i] = 0;
+      if (nrows > 0)
+        rows[i] = INTEGER(hessianrows)[i] - 1; // R-index -> C-index
     }
   }
   vector<double> x = asVector<double>(theta);
-  SEXP res=R_NilValue;
-  SEXP rangeweight=getListElement(control,"rangeweight");
-  if(rangeweight!=R_NilValue){
-    if(LENGTH(rangeweight)!=m)Rf_error("rangeweight must have length equal to range dimension");
-    if(doforward)pf->Forward(0,x);
-    res=asSEXP(pf->Reverse(1,asVector<double>(rangeweight)));
+  SEXP res = R_NilValue;
+  SEXP rangeweight = getListElement(control, "rangeweight");
+  if (rangeweight != R_NilValue)
+  {
+    if (LENGTH(rangeweight) != m)
+      Rf_error("rangeweight must have length equal to range dimension");
+    if (doforward)
+      pf->Forward(0, x);
+    res = asSEXP(pf->Reverse(1, asVector<double>(rangeweight)));
     UNPROTECT(3);
     return res;
   }
-  if(order==3){
+  if (order == 3)
+  {
     vector<double> w(1);
-    w[0]=1;
-    if((nrows!=1) | (ncols!=1))Rf_error("For 3rd order derivatives a single hessian coordinate must be specified.");
-    pf->ForTwo(x,rows,cols); /* Compute forward directions */
-    PROTECT(res=asSEXP(asMatrix(pf->Reverse(3,w),n,3)));
+    w[0] = 1;
+    if ((nrows != 1) | (ncols != 1))
+      Rf_error("For 3rd order derivatives a single hessian coordinate must be specified.");
+    pf->ForTwo(x, rows, cols); /* Compute forward directions */
+    PROTECT(res = asSEXP(asMatrix(pf->Reverse(3, w), n, 3)));
   }
-  if(order==0){
-    if(dumpstack)CppAD::traceforward0sweep(1);
-    PROTECT(res=asSEXP(pf->Forward(0,x)));
-    if(dumpstack)CppAD::traceforward0sweep(0);
-    SEXP rangenames=Rf_getAttrib(f,Rf_install("range.names"));
-    if(LENGTH(res)==LENGTH(rangenames)){
-      Rf_setAttrib(res,R_NamesSymbol,rangenames);
+  if (order == 0)
+  {
+    if (dumpstack)
+      CppAD::traceforward0sweep(1);
+    PROTECT(res = asSEXP(pf->Forward(0, x)));
+    if (dumpstack)
+      CppAD::traceforward0sweep(0);
+    SEXP rangenames = Rf_getAttrib(f, Rf_install("range.names"));
+    if (LENGTH(res) == LENGTH(rangenames))
+    {
+      Rf_setAttrib(res, R_NamesSymbol, rangenames);
     }
   }
-  if(order==1){
-    if(doforward)pf->Forward(0,x);
+  if (order == 1)
+  {
+    if (doforward)
+      pf->Forward(0, x);
     matrix<double> jac(m, n);
     vector<double> u(n);
     vector<double> v(m);
     v.setZero();
-    for(int i=0; i<m; i++) {
-      v[i] = 1.0; u = pf->Reverse(1,v);
+    for (int i = 0; i < m; i++)
+    {
+      v[i] = 1.0;
+      u = pf->Reverse(1, v);
       v[i] = 0.0;
       jac.row(i) = u;
     }
-    PROTECT( res = asSEXP(jac) );
+    PROTECT(res = asSEXP(jac));
   }
-  //if(order==2)res=asSEXP(pf->Hessian(x,0),1);
-  if(order==2){
-    if(ncols==0){
-      if(sparsitypattern){
-	PROTECT(res=asSEXP(HessianSparsityPattern(pf)));  
-      } else {
-	PROTECT(res=asSEXP(asMatrix(pf->Hessian(x,rangecomponent),n,n)));
+  // if(order==2)res=asSEXP(pf->Hessian(x,0),1);
+  if (order == 2)
+  {
+    if (ncols == 0)
+    {
+      if (sparsitypattern)
+      {
+        PROTECT(res = asSEXP(HessianSparsityPattern(pf)));
+      }
+      else
+      {
+        PROTECT(res = asSEXP(asMatrix(pf->Hessian(x, rangecomponent), n, n)));
       }
     }
-    else if (nrows==0){
+    else if (nrows == 0)
+    {
       /* Fixme: the cols0 argument should be user changeable */
-      PROTECT(res=asSEXP(asMatrix(pf->RevTwo(x,cols0,cols),n,ncols)));
+      PROTECT(res = asSEXP(asMatrix(pf->RevTwo(x, cols0, cols), n, ncols)));
     }
-    else PROTECT(res=asSEXP(asMatrix(pf->ForTwo(x,rows,cols),m,ncols)));
+    else
+      PROTECT(res = asSEXP(asMatrix(pf->ForTwo(x, rows, cols), m, ncols)));
   }
   UNPROTECT(4);
   return res;
@@ -1247,41 +1549,48 @@ SEXP EvalADFunObjectTemplate(SEXP f, SEXP theta, SEXP control)
 template <class ADFunType>
 void finalize(SEXP x)
 {
-  ADFunType* ptr=(ADFunType*)R_ExternalPtrAddr(x);
-  if(ptr!=NULL)delete ptr;
+  ADFunType *ptr = (ADFunType *)R_ExternalPtrAddr(x);
+  if (ptr != NULL)
+    delete ptr;
   memory_manager.CallCFinalizer(x);
 }
 
 #ifdef TMBAD_FRAMEWORK
 /** \internal \brief Construct ADFun object */
-TMBad::ADFun< TMBad::ad_aug >* MakeADFunObject_(SEXP data, SEXP parameters,
-			       SEXP report, SEXP control, int parallel_region=-1,
-			       SEXP &info=R_NilValue)
+TMBad::ADFun<TMBad::ad_aug> *MakeADFunObject_(SEXP data, SEXP parameters,
+                                              SEXP report, SEXP control, int parallel_region = -1,
+                                              SEXP &info = R_NilValue)
 {
   typedef TMBad::ad_aug ad;
   typedef TMBad::ADFun<ad> adfun;
-  int returnReport = (control!=R_NilValue) && getListInteger(control, "report");
+  int returnReport = (control != R_NilValue) && getListInteger(control, "report");
   /* Create objective_function "dummy"-object */
-  objective_function< ad > F(data,parameters,report);
+  objective_function<ad> F(data, parameters, report);
   F.set_parallel_region(parallel_region);
   /* Create ADFun pointer.
      We have the option to tape either the value returned by the
      objective_function template or the vector reported using the
      macro "ADREPORT" */
-  adfun* pf = new adfun();
+  adfun *pf = new adfun();
   pf->glob.ad_start();
-  //TMBad::Independent(F.theta);  // In both cases theta is the independent variable
-  for (int i=0; i<F.theta.size(); i++) F.theta(i).Independent();
-  if(!returnReport){ // Default case: no ad report - parallel run allowed
-    vector< ad > y(1);
+  // TMBad::Independent(F.theta);  // In both cases theta is the independent variable
+  for (int i = 0; i < F.theta.size(); i++)
+    F.theta(i).Independent();
+  if (!returnReport)
+  { // Default case: no ad report - parallel run allowed
+    vector<ad> y(1);
     y[0] = F.evalUserTemplate();
-    //TMBad::Dependent(y);
-    for (int i=0; i<y.size(); i++) y[i].Dependent();
-  } else { // ad report case
+    // TMBad::Dependent(y);
+    for (int i = 0; i < y.size(); i++)
+      y[i].Dependent();
+  }
+  else
+  {      // ad report case
     F(); // Run through user template (modifies reportvector)
-    //TMBad::Dependent(F.reportvector.result);
-    for (int i=0; i<F.reportvector.size(); i++) F.reportvector.result[i].Dependent();
-    info=F.reportvector.reportnames(); // parallel run *not* allowed
+    // TMBad::Dependent(F.reportvector.result);
+    for (int i = 0; i < F.reportvector.size(); i++)
+      F.reportvector.result[i].Dependent();
+    info = F.reportvector.reportnames(); // parallel run *not* allowed
   }
   pf->glob.ad_stop();
   return pf;
@@ -1290,28 +1599,31 @@ TMBad::ADFun< TMBad::ad_aug >* MakeADFunObject_(SEXP data, SEXP parameters,
 
 #ifdef CPPAD_FRAMEWORK
 /** \internal \brief Construct ADFun object */
-ADFun<double>* MakeADFunObject_(SEXP data, SEXP parameters,
-			       SEXP report, SEXP control, int parallel_region=-1,
-			       SEXP &info=R_NilValue)
+ADFun<double> *MakeADFunObject_(SEXP data, SEXP parameters,
+                                SEXP report, SEXP control, int parallel_region = -1,
+                                SEXP &info = R_NilValue)
 {
   int returnReport = getListInteger(control, "report");
   /* Create objective_function "dummy"-object */
-  objective_function< AD<double> > F(data,parameters,report);
+  objective_function<AD<double>> F(data, parameters, report);
   F.set_parallel_region(parallel_region);
   /* Create ADFun pointer.
      We have the option to tape either the value returned by the
      objective_function template or the vector reported using the
      macro "ADREPORT" */
-  Independent(F.theta);  // In both cases theta is the independent variable
-  ADFun< double >* pf;
-  if(!returnReport){ // Default case: no ad report - parallel run allowed
-    vector< AD<double> > y(1);
-    y[0]=F.evalUserTemplate();
-    pf = new ADFun< double >(F.theta,y);
-  } else { // ad report case
+  Independent(F.theta); // In both cases theta is the independent variable
+  ADFun<double> *pf;
+  if (!returnReport)
+  { // Default case: no ad report - parallel run allowed
+    vector<AD<double>> y(1);
+    y[0] = F.evalUserTemplate();
+    pf = new ADFun<double>(F.theta, y);
+  }
+  else
+  {      // ad report case
     F(); // Run through user template (modifies reportvector)
-    pf = new ADFun< double >(F.theta,F.reportvector());
-    info=F.reportvector.reportnames(); // parallel run *not* allowed
+    pf = new ADFun<double>(F.theta, F.reportvector());
+    info = F.reportvector.reportnames(); // parallel run *not* allowed
   }
   return pf;
 }
@@ -1324,11 +1636,11 @@ extern "C"
   /** \internal \brief Garbage collect an ADFun object pointer */
   void finalizeADFun(SEXP x)
   {
-    finalize<TMBad::ADFun<TMBad::ad_aug> > (x);
+    finalize<TMBad::ADFun<TMBad::ad_aug>>(x);
   }
   void finalizeparallelADFun(SEXP x)
   {
-    finalize<parallelADFun<double> > (x);
+    finalize<parallelADFun<double>>(x);
   }
 #endif
 
@@ -1336,11 +1648,11 @@ extern "C"
   /** \internal \brief Garbage collect an ADFun object pointer */
   void finalizeADFun(SEXP x)
   {
-    finalize<ADFun<double> > (x);
+    finalize<ADFun<double>>(x);
   }
   void finalizeparallelADFun(SEXP x)
   {
-    finalize<parallelADFun<double> > (x);
+    finalize<parallelADFun<double>>(x);
   }
 #endif
 
@@ -1349,85 +1661,104 @@ extern "C"
 #ifdef TMBAD_FRAMEWORK
   /** \internal \brief Construct ADFun object */
   SEXP MakeADFunObject(SEXP data, SEXP parameters,
-		       SEXP report, SEXP control)
+                       SEXP report, SEXP control)
   {
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
 
-    adfun* pf = NULL;
+    adfun *pf = NULL;
     /* Some type checking */
-    if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-    if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-    if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
-    if(!Rf_isNewList(control))Rf_error("'control' must be a list");
+    if (!Rf_isNewList(data))
+      Rf_error("'data' must be a list");
+    if (!Rf_isNewList(parameters))
+      Rf_error("'parameters' must be a list");
+    if (!Rf_isEnvironment(report))
+      Rf_error("'report' must be an environment");
+    if (!Rf_isNewList(control))
+      Rf_error("'control' must be a list");
     int returnReport = getListInteger(control, "report");
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res=NULL,info;
-    objective_function< double > F(data,parameters,report);
+    SEXP par, res = NULL, info;
+    objective_function<double> F(data, parameters, report);
 #ifdef _OPENMP
-    int n=F.count_parallel_regions(); // Evaluates user template
+    int n = F.count_parallel_regions(); // Evaluates user template
 #else
     F.count_parallel_regions(); // Evaluates user template
 #endif
-    if(returnReport && F.reportvector.size()==0){
+    if (returnReport && F.reportvector.size() == 0)
+    {
       /* Told to report, but no ADREPORT in template: Get out quickly */
       return R_NilValue;
     }
-    PROTECT(par=F.defaultpar());
-    PROTECT(info=R_NilValue); // Important
+    PROTECT(par = F.defaultpar());
+    PROTECT(info = R_NilValue); // Important
 
-    if(_openmp && !returnReport){ // Parallel mode
+    if (_openmp && !returnReport)
+    { // Parallel mode
 #ifdef _OPENMP
-      if(config.trace.parallel)
+      if (config.trace.parallel)
         Rcout << n << " regions found.\n";
-      if (n==0) n++; // No explicit parallel accumulation
+      if (n == 0)
+        n++;            // No explicit parallel accumulation
       start_parallel(); /* FIXME: NOT NEEDED */
-      vector< adfun* > pfvec(n);
-      const char* bad_thread_alloc = NULL;
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-      for(int i = 0; i < n; i++) {
-        TMB_TRY {
+      vector<adfun *> pfvec(n);
+      const char *bad_thread_alloc = NULL;
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+      for (int i = 0; i < n; i++)
+      {
+        TMB_TRY
+        {
           pfvec[i] = NULL;
           pfvec[i] = MakeADFunObject_(data, parameters, report, control, i, info);
-          if (config.optimize.instantly) pfvec[i]->optimize();
+          if (config.optimize.instantly)
+            pfvec[i]->optimize();
         }
-        TMB_CATCH {
-          if (pfvec[i] != NULL) delete pfvec[i];
+        TMB_CATCH
+        {
+          if (pfvec[i] != NULL)
+            delete pfvec[i];
           bad_thread_alloc = excpt.what();
         }
       }
-      if (bad_thread_alloc) {
+      if (bad_thread_alloc)
+      {
         TMB_ERROR_BAD_THREAD_ALLOC;
       }
 
       // FIXME: NOT DONE YET
 
-      parallelADFun<double>* ppf=new parallelADFun<double>(pfvec);
+      parallelADFun<double> *ppf = new parallelADFun<double>(pfvec);
       /* Convert parallel ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) ppf,Rf_install("parallelADFun"),R_NilValue));
-      //R_RegisterCFinalizer(res,finalizeparallelADFun);
+      PROTECT(res = R_MakeExternalPtr((void *)ppf, Rf_install("parallelADFun"), R_NilValue));
+      // R_RegisterCFinalizer(res,finalizeparallelADFun);
 #endif
-    } else { // Serial mode
-      TMB_TRY{
-	/* Actual work: tape creation */
-	pf = NULL;
-	pf = MakeADFunObject_(data, parameters, report, control, -1, info);
-	if (config.optimize.instantly) pf->optimize();
+    }
+    else
+    { // Serial mode
+      TMB_TRY
+      {
+        /* Actual work: tape creation */
+        pf = NULL;
+        pf = MakeADFunObject_(data, parameters, report, control, -1, info);
+        if (config.optimize.instantly)
+          pf->optimize();
       }
-      TMB_CATCH {
-	if (pf != NULL) delete pf;
-	TMB_ERROR_BAD_ALLOC;
+      TMB_CATCH
+      {
+        if (pf != NULL)
+          delete pf;
+        TMB_ERROR_BAD_ALLOC;
       }
       /* Convert ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) pf,Rf_install("ADFun"),R_NilValue));
-      Rf_setAttrib(res,Rf_install("range.names"),info);
+      PROTECT(res = R_MakeExternalPtr((void *)pf, Rf_install("ADFun"), R_NilValue));
+      Rf_setAttrib(res, Rf_install("range.names"), info);
     }
 
     /* Return list of external pointer and default-parameter */
     SEXP ans;
-    Rf_setAttrib(res,Rf_install("par"),par);
-    PROTECT(ans=ptrList(res));
+    Rf_setAttrib(res, Rf_install("par"), par);
+    PROTECT(ans = ptrList(res));
     UNPROTECT(4);
 
     return ans;
@@ -1437,78 +1768,97 @@ extern "C"
 #ifdef CPPAD_FRAMEWORK
   /** \internal \brief Construct ADFun object */
   SEXP MakeADFunObject(SEXP data, SEXP parameters,
-                             SEXP report, SEXP control)
+                       SEXP report, SEXP control)
   {
-    ADFun<double>* pf = NULL;
+    ADFun<double> *pf = NULL;
     /* Some type checking */
-    if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-    if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-    if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
-    if(!Rf_isNewList(control))Rf_error("'control' must be a list");
+    if (!Rf_isNewList(data))
+      Rf_error("'data' must be a list");
+    if (!Rf_isNewList(parameters))
+      Rf_error("'parameters' must be a list");
+    if (!Rf_isEnvironment(report))
+      Rf_error("'report' must be an environment");
+    if (!Rf_isNewList(control))
+      Rf_error("'control' must be a list");
     int returnReport = getListInteger(control, "report");
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res=NULL,info;
-    objective_function< double > F(data,parameters,report);
+    SEXP par, res = NULL, info;
+    objective_function<double> F(data, parameters, report);
 #ifdef _OPENMP
-    int n=F.count_parallel_regions(); // Evaluates user template
+    int n = F.count_parallel_regions(); // Evaluates user template
 #else
     F.count_parallel_regions(); // Evaluates user template
 #endif
-    if(returnReport && F.reportvector.size()==0){
+    if (returnReport && F.reportvector.size() == 0)
+    {
       /* Told to report, but no ADREPORT in template: Get out quickly */
       return R_NilValue;
     }
-    PROTECT(par=F.defaultpar());
-    PROTECT(info=R_NilValue); // Important
+    PROTECT(par = F.defaultpar());
+    PROTECT(info = R_NilValue); // Important
 
-    if(_openmp && !returnReport){ // Parallel mode
+    if (_openmp && !returnReport)
+    { // Parallel mode
 #ifdef _OPENMP
-      if(config.trace.parallel)
-	Rcout << n << " regions found.\n";
-      if (n==0) n++; // No explicit parallel accumulation
+      if (config.trace.parallel)
+        Rcout << n << " regions found.\n";
+      if (n == 0)
+        n++;            // No explicit parallel accumulation
       start_parallel(); /* Start threads */
-      vector< ADFun<double>* > pfvec(n);
-      const char* bad_thread_alloc = NULL;
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-      for(int i=0;i<n;i++){
-	TMB_TRY {
-	  pfvec[i] = NULL;
-	  pfvec[i] = MakeADFunObject_(data, parameters, report, control, i, info);
-	  if (config.optimize.instantly) pfvec[i]->optimize();
-	}
-	TMB_CATCH {
-          if (pfvec[i] != NULL) delete pfvec[i];
+      vector<ADFun<double> *> pfvec(n);
+      const char *bad_thread_alloc = NULL;
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+      for (int i = 0; i < n; i++)
+      {
+        TMB_TRY
+        {
+          pfvec[i] = NULL;
+          pfvec[i] = MakeADFunObject_(data, parameters, report, control, i, info);
+          if (config.optimize.instantly)
+            pfvec[i]->optimize();
+        }
+        TMB_CATCH
+        {
+          if (pfvec[i] != NULL)
+            delete pfvec[i];
           bad_thread_alloc = excpt.what();
         }
       }
-      if (bad_thread_alloc) {
-	TMB_ERROR_BAD_THREAD_ALLOC;
+      if (bad_thread_alloc)
+      {
+        TMB_ERROR_BAD_THREAD_ALLOC;
       }
-      parallelADFun<double>* ppf=new parallelADFun<double>(pfvec);
+      parallelADFun<double> *ppf = new parallelADFun<double>(pfvec);
       /* Convert parallel ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) ppf,Rf_install("parallelADFun"),R_NilValue));
+      PROTECT(res = R_MakeExternalPtr((void *)ppf, Rf_install("parallelADFun"), R_NilValue));
 #endif
-    } else { // Serial mode
-      TMB_TRY{
-	/* Actual work: tape creation */
-	pf = NULL;
-	pf = MakeADFunObject_(data, parameters, report, control, -1, info);
-	if (config.optimize.instantly) pf->optimize();
+    }
+    else
+    { // Serial mode
+      TMB_TRY
+      {
+        /* Actual work: tape creation */
+        pf = NULL;
+        pf = MakeADFunObject_(data, parameters, report, control, -1, info);
+        if (config.optimize.instantly)
+          pf->optimize();
       }
-      TMB_CATCH {
-	if (pf != NULL) delete pf;
-	TMB_ERROR_BAD_ALLOC;
+      TMB_CATCH
+      {
+        if (pf != NULL)
+          delete pf;
+        TMB_ERROR_BAD_ALLOC;
       }
       /* Convert ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) pf,Rf_install("ADFun"),R_NilValue));
-      Rf_setAttrib(res,Rf_install("range.names"),info);
+      PROTECT(res = R_MakeExternalPtr((void *)pf, Rf_install("ADFun"), R_NilValue));
+      Rf_setAttrib(res, Rf_install("range.names"), info);
     }
 
     /* Return list of external pointer and default-parameter */
     SEXP ans;
-    Rf_setAttrib(res,Rf_install("par"),par);
-    PROTECT(ans=ptrList(res));
+    Rf_setAttrib(res, Rf_install("par"), par);
+    PROTECT(ans = ptrList(res));
     UNPROTECT(4);
 
     return ans;
@@ -1518,254 +1868,292 @@ extern "C"
   /* --- TransformADFunObject ----------------------------------------------- */
 
 #ifdef TMBAD_FRAMEWORK
-inline int get_num_tapes(SEXP f) {
-  if (Rf_isNull(f))
-    return 0;
-  SEXP tag = R_ExternalPtrTag(f);
-  if (tag != Rf_install("parallelADFun"))
-    return 0;
-  return
-    ((parallelADFun<double>*) R_ExternalPtrAddr(f))->ntapes;
-}
-SEXP TransformADFunObjectTemplate(TMBad::ADFun<TMBad::ad_aug>* pf, SEXP control)
-{
-  if (pf == NULL)
-    Rf_error("Cannot transform '<pointer: (nil)>' (unloaded/reloaded DLL?)");
-  typedef TMBad::ad_aug ad;
-  typedef TMBad::ADFun<ad> adfun;
-  // FIXME: Must require non parallel object !!!
-  std::string method =
-    CHAR(STRING_ELT(getListElement(control, "method"), 0));
-  // Test adfun copy
-  if (method == "copy") {
-    *pf = adfun(*pf);
-    return R_NilValue;
-  }
-  if (method == "set_compiled") {
-    int i = 0;
-#ifdef _OPENMP
-    i = omp_get_thread_num();
-#endif
-    typedef void(*fct_ptr1)(double*);
-    typedef void(*fct_ptr2)(double*,double*);
-    pf->glob.forward_compiled =
-      (fct_ptr1) R_ExternalPtrAddr(VECTOR_ELT(getListElement(control, "forward_compiled"), i));
-    pf->glob.reverse_compiled =
-      (fct_ptr2) R_ExternalPtrAddr(VECTOR_ELT(getListElement(control, "reverse_compiled"), i));
-    return R_NilValue;
-  }
-  SEXP random_order = getListElement(control, "random_order");
-  int nr = (Rf_isNull(random_order) ? 0 : LENGTH(random_order));
-  std::vector<TMBad::Index> random;
-  if (nr != 0) {
-    random = std::vector<TMBad::Index>(INTEGER(random_order),
-                                       INTEGER(random_order) + nr);
-    for (size_t i=0; i<random.size(); i++)
-      random[i] -= 1 ; // R index -> C index
-  }
-  TMB_TRY {
-    if (method == "remove_random_parameters") {
-      std::vector<bool> mask(pf->Domain(), true);
-      for (size_t i = 0; i<random.size(); i++)
-        mask[random[i]] = false;
-      pf->glob.inv_index = TMBad::subset(pf->glob.inv_index, mask);
-    }
-    else if (method == "laplace") {
-      SEXP config = getListElement(control, "config");
-      newton::newton_config cfg(config);
-      *pf = newton::Laplace_(*pf, random, cfg);
-    }
-    else if (method == "marginal_gk") {
-      TMBad::gk_config cfg;
-      SEXP config = getListElement(control, "config");
-      if (!Rf_isNull(config)) {
-        cfg.adaptive = getListInteger(config, "adaptive", 0);
-        cfg.debug    = getListInteger(config, "debug", 0);
-      }
-      *pf = pf -> marginal_gk(random, cfg);
-    }
-    else if (method == "marginal_sr") {
-      SEXP config = getListElement(control, "config");
-      std::vector<TMBad::sr_grid> grids;
-      SEXP grid        = getListElement(config, "grid");
-      SEXP random2grid = getListElement(config, "random2grid");
-      for (int i=0; i<LENGTH(grid); i++) {
-        SEXP grid_i = VECTOR_ELT(grid, i);
-        SEXP x = getListElement(grid_i, "x");
-        SEXP w = getListElement(grid_i, "w");
-        if (LENGTH(x) != LENGTH(w))
-          Rf_error("Length of grid$x and grid$w must be equal");
-        TMBad::sr_grid grid_sr;
-        grid_sr.x = std::vector<double>(REAL(x), REAL(x) + LENGTH(x));
-        grid_sr.w = std::vector<double>(REAL(w), REAL(w) + LENGTH(w));
-        grids.push_back(grid_sr);
-      }
-      std::vector<TMBad::Index> r2g(INTEGER(random2grid),
-                                    INTEGER(random2grid) + LENGTH(random2grid));
-      for (size_t i=0; i<r2g.size(); i++)
-        r2g[i] -= 1 ; // R index -> C index
-      *pf = pf -> marginal_sr(random, grids, r2g, true);
-    }
-    else if (method == "parallelize")
-      *pf = pf -> parallelize(2);
-    else if (method == "compress") {
-      int max_period_size = getListInteger(control, "max_period_size", 1024);
-      TMBad::compress(pf->glob, max_period_size);
-    }
-    else if (method == "compress_and_compile") {
-#ifdef HAVE_COMPILE_HPP
-      int max_period_size = getListInteger(control, "max_period_size", 1024);
-      TMBad::compress(pf->glob, max_period_size);
-      // if (config.optimize.instantly) pf->glob.eliminate();
-      TMBad::compile(pf->glob);
-#else
-      Rf_error("TMBad::compile() is unavailable");
-#endif
-    }
-    else if (method == "accumulation_tree_split")
-      pf->glob = accumulation_tree_split(pf->glob, true);
-    else if (method == "fuse_and_replay") {
-      pf->glob.set_fuse(true);
-      pf->replay();
-      pf->glob.set_fuse(false);
-    }
-    else if (method == "reorder_random") {
-      pf->reorder(random);
-    }
-    else if (method == "reorder_sub_expressions") {
-      TMBad::reorder_sub_expressions(pf->glob);
-    }
-    else if (method == "reorder_depth_first") {
-      TMBad::reorder_depth_first(pf->glob);
-    }
-    else if (method == "reorder_temporaries") {
-      TMBad::reorder_temporaries(pf->glob);
-    }
-    else if (method == "parallel_accumulate") {
-      // Known method - done elsewhere
-    }
-    else if (method == "optimize") {
-      pf->optimize();
-    } else {
-      Rf_error("Method unknown: '%s'", method.c_str());
-    }
-  }
-  TMB_CATCH {
-    TMB_ERROR_BAD_ALLOC;
-  }
-  // for (size_t i=0; i<random.size(); i++) random[i] += 1 ; // C index -> R index
-  // Rf_setAttrib(f, Rf_install("random_order"), asSEXP(random));
-  return R_NilValue;
-}
-/** \internal \brief Transform an existing ADFun object */
-SEXP TransformADFunObject(SEXP f, SEXP control)
-{
-  if (Rf_isNull(f))
-    Rf_error("Expected external pointer - got NULL");
-  SEXP tag = R_ExternalPtrTag(f);
-  if (tag != Rf_install("ADFun"))
+  inline int get_num_tapes(SEXP f)
+  {
+    if (Rf_isNull(f))
+      return 0;
+    SEXP tag = R_ExternalPtrTag(f);
     if (tag != Rf_install("parallelADFun"))
-      Rf_error("Expected ADFun or parallelADFun pointer");
-  typedef TMBad::ad_aug ad;
-  typedef TMBad::ADFun<ad> adfun;
-  if(tag == Rf_install("ADFun")) {
-    adfun* pf = (adfun*) R_ExternalPtrAddr(f);
-    TransformADFunObjectTemplate(pf, control);
-  } else if (tag == Rf_install("parallelADFun")) {
-    // Warning: Most no meaningful for parallel models!:
-    // OK      : reorder_random etc
-    // NOT OK  : copy, set_compiled, marginal_sr etc
-    parallelADFun<double>* ppf = (parallelADFun<double>*) R_ExternalPtrAddr(f);
-    // Apply method for each component except for one special case:
-    // 'Parallel accumulate'
+      return 0;
+    return ((parallelADFun<double> *)R_ExternalPtrAddr(f))->ntapes;
+  }
+  SEXP TransformADFunObjectTemplate(TMBad::ADFun<TMBad::ad_aug> *pf, SEXP control)
+  {
+    if (pf == NULL)
+      Rf_error("Cannot transform '<pointer: (nil)>' (unloaded/reloaded DLL?)");
+    typedef TMBad::ad_aug ad;
+    typedef TMBad::ADFun<ad> adfun;
+    // FIXME: Must require non parallel object !!!
     std::string method =
-      CHAR(STRING_ELT(getListElement(control, "method"), 0));
-    if (method == "parallel_accumulate") {
-      int num_threads = getListInteger(control, "num_threads", 2);
-      if (num_threads == 1) {
-        // No need to parallelize
-        return R_NilValue;
-      }
-      if (get_num_tapes(f) > 1) {
-        // Already parallel (via parallel_accumulator or similar)
-        return R_NilValue;
-      }
-      adfun* pf = (ppf->vecpf)[0]; // One tape - get it
-      std::vector<adfun> vf = pf->parallel_accumulate(num_threads);
-      if (config.trace.parallel) {
-        Rcout << "Autopar work split\n";
-        for (size_t i=0; i < vf.size(); i++) {
-          Rcout << "Chunk " << i << ": ";
-          Rcout << (double) vf[i].glob.opstack.size() / pf->glob.opstack.size() << "\n";
-        }
-      }
-      parallelADFun<double>* new_ppf = new parallelADFun<double>(vf);
-      delete ppf;
-      R_SetExternalPtrAddr(f, new_ppf);
+        CHAR(STRING_ELT(getListElement(control, "method"), 0));
+    // Test adfun copy
+    if (method == "copy")
+    {
+      *pf = adfun(*pf);
       return R_NilValue;
     }
+    if (method == "set_compiled")
+    {
+      int i = 0;
+#ifdef _OPENMP
+      i = omp_get_thread_num();
+#endif
+      typedef void (*fct_ptr1)(double *);
+      typedef void (*fct_ptr2)(double *, double *);
+      pf->glob.forward_compiled =
+          (fct_ptr1)R_ExternalPtrAddr(VECTOR_ELT(getListElement(control, "forward_compiled"), i));
+      pf->glob.reverse_compiled =
+          (fct_ptr2)R_ExternalPtrAddr(VECTOR_ELT(getListElement(control, "reverse_compiled"), i));
+      return R_NilValue;
+    }
+    SEXP random_order = getListElement(control, "random_order");
+    int nr = (Rf_isNull(random_order) ? 0 : LENGTH(random_order));
+    std::vector<TMBad::Index> random;
+    if (nr != 0)
+    {
+      random = std::vector<TMBad::Index>(INTEGER(random_order),
+                                         INTEGER(random_order) + nr);
+      for (size_t i = 0; i < random.size(); i++)
+        random[i] -= 1; // R index -> C index
+    }
+    TMB_TRY
+    {
+      if (method == "remove_random_parameters")
+      {
+        std::vector<bool> mask(pf->Domain(), true);
+        for (size_t i = 0; i < random.size(); i++)
+          mask[random[i]] = false;
+        pf->glob.inv_index = TMBad::subset(pf->glob.inv_index, mask);
+      }
+      else if (method == "laplace")
+      {
+        SEXP config = getListElement(control, "config");
+        newton::newton_config cfg(config);
+        *pf = newton::Laplace_(*pf, random, cfg);
+      }
+      else if (method == "marginal_gk")
+      {
+        TMBad::gk_config cfg;
+        SEXP config = getListElement(control, "config");
+        if (!Rf_isNull(config))
+        {
+          cfg.adaptive = getListInteger(config, "adaptive", 0);
+          cfg.debug = getListInteger(config, "debug", 0);
+        }
+        *pf = pf->marginal_gk(random, cfg);
+      }
+      else if (method == "marginal_sr")
+      {
+        SEXP config = getListElement(control, "config");
+        std::vector<TMBad::sr_grid> grids;
+        SEXP grid = getListElement(config, "grid");
+        SEXP random2grid = getListElement(config, "random2grid");
+        for (int i = 0; i < LENGTH(grid); i++)
+        {
+          SEXP grid_i = VECTOR_ELT(grid, i);
+          SEXP x = getListElement(grid_i, "x");
+          SEXP w = getListElement(grid_i, "w");
+          if (LENGTH(x) != LENGTH(w))
+            Rf_error("Length of grid$x and grid$w must be equal");
+          TMBad::sr_grid grid_sr;
+          grid_sr.x = std::vector<double>(REAL(x), REAL(x) + LENGTH(x));
+          grid_sr.w = std::vector<double>(REAL(w), REAL(w) + LENGTH(w));
+          grids.push_back(grid_sr);
+        }
+        std::vector<TMBad::Index> r2g(INTEGER(random2grid),
+                                      INTEGER(random2grid) + LENGTH(random2grid));
+        for (size_t i = 0; i < r2g.size(); i++)
+          r2g[i] -= 1; // R index -> C index
+        *pf = pf->marginal_sr(random, grids, r2g, true);
+      }
+      else if (method == "parallelize")
+        *pf = pf->parallelize(2);
+      else if (method == "compress")
+      {
+        int max_period_size = getListInteger(control, "max_period_size", 1024);
+        TMBad::compress(pf->glob, max_period_size);
+      }
+      else if (method == "compress_and_compile")
+      {
+#ifdef HAVE_COMPILE_HPP
+        int max_period_size = getListInteger(control, "max_period_size", 1024);
+        TMBad::compress(pf->glob, max_period_size);
+        // if (config.optimize.instantly) pf->glob.eliminate();
+        TMBad::compile(pf->glob);
+#else
+        Rf_error("TMBad::compile() is unavailable");
+#endif
+      }
+      else if (method == "accumulation_tree_split")
+        pf->glob = accumulation_tree_split(pf->glob, true);
+      else if (method == "fuse_and_replay")
+      {
+        pf->glob.set_fuse(true);
+        pf->replay();
+        pf->glob.set_fuse(false);
+      }
+      else if (method == "reorder_random")
+      {
+        pf->reorder(random);
+      }
+      else if (method == "reorder_sub_expressions")
+      {
+        TMBad::reorder_sub_expressions(pf->glob);
+      }
+      else if (method == "reorder_depth_first")
+      {
+        TMBad::reorder_depth_first(pf->glob);
+      }
+      else if (method == "reorder_temporaries")
+      {
+        TMBad::reorder_temporaries(pf->glob);
+      }
+      else if (method == "parallel_accumulate")
+      {
+        // Known method - done elsewhere
+      }
+      else if (method == "optimize")
+      {
+        pf->optimize();
+      }
+      else
+      {
+        Rf_error("Method unknown: '%s'", method.c_str());
+      }
+    }
+    TMB_CATCH
+    {
+      TMB_ERROR_BAD_ALLOC;
+    }
+    // for (size_t i=0; i<random.size(); i++) random[i] += 1 ; // C index -> R index
+    // Rf_setAttrib(f, Rf_install("random_order"), asSEXP(random));
+    return R_NilValue;
+  }
+  /** \internal \brief Transform an existing ADFun object */
+  SEXP TransformADFunObject(SEXP f, SEXP control)
+  {
+    if (Rf_isNull(f))
+      Rf_error("Expected external pointer - got NULL");
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag != Rf_install("ADFun"))
+      if (tag != Rf_install("parallelADFun"))
+        Rf_error("Expected ADFun or parallelADFun pointer");
+    typedef TMBad::ad_aug ad;
+    typedef TMBad::ADFun<ad> adfun;
+    if (tag == Rf_install("ADFun"))
+    {
+      adfun *pf = (adfun *)R_ExternalPtrAddr(f);
+      TransformADFunObjectTemplate(pf, control);
+    }
+    else if (tag == Rf_install("parallelADFun"))
+    {
+      // Warning: Most no meaningful for parallel models!:
+      // OK      : reorder_random etc
+      // NOT OK  : copy, set_compiled, marginal_sr etc
+      parallelADFun<double> *ppf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      // Apply method for each component except for one special case:
+      // 'Parallel accumulate'
+      std::string method =
+          CHAR(STRING_ELT(getListElement(control, "method"), 0));
+      if (method == "parallel_accumulate")
+      {
+        int num_threads = getListInteger(control, "num_threads", 2);
+        if (num_threads == 1)
+        {
+          // No need to parallelize
+          return R_NilValue;
+        }
+        if (get_num_tapes(f) > 1)
+        {
+          // Already parallel (via parallel_accumulator or similar)
+          return R_NilValue;
+        }
+        adfun *pf = (ppf->vecpf)[0]; // One tape - get it
+        std::vector<adfun> vf = pf->parallel_accumulate(num_threads);
+        if (config.trace.parallel)
+        {
+          Rcout << "Autopar work split\n";
+          for (size_t i = 0; i < vf.size(); i++)
+          {
+            Rcout << "Chunk " << i << ": ";
+            Rcout << (double)vf[i].glob.opstack.size() / pf->glob.opstack.size() << "\n";
+          }
+        }
+        parallelADFun<double> *new_ppf = new parallelADFun<double>(vf);
+        delete ppf;
+        R_SetExternalPtrAddr(f, new_ppf);
+        return R_NilValue;
+      }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(config.nthreads)
 #endif
-    for (int i=0; i<ppf->ntapes; i++) {
-      adfun* pf = (ppf->vecpf)[i];
-      TransformADFunObjectTemplate(pf, control);
+      for (int i = 0; i < ppf->ntapes; i++)
+      {
+        adfun *pf = (ppf->vecpf)[i];
+        TransformADFunObjectTemplate(pf, control);
+      }
+      // Some methods change Domain or Range of individual tapes. This
+      // is allowed when there is only one tape.
+      if (ppf->ntapes == 1)
+      {
+        ppf->domain = (ppf->vecpf)[0]->Domain();
+        ppf->range = (ppf->vecpf)[0]->Range();
+      }
+      // Now, check that it's ok. FIXME: Range() is not checked
+      for (int i = 0; i < ppf->ntapes; i++)
+      {
+        if (ppf->domain != (ppf->vecpf)[i]->Domain())
+          Rf_warning("Domain has changed in an invalid way");
+      }
     }
-    // Some methods change Domain or Range of individual tapes. This
-    // is allowed when there is only one tape.
-    if (ppf->ntapes == 1) {
-      ppf->domain = (ppf->vecpf)[0]->Domain();
-      ppf->range  = (ppf->vecpf)[0]->Range();
+    else
+    {
+      Rf_error("Unknown function pointer");
     }
-    // Now, check that it's ok. FIXME: Range() is not checked
-    for (int i=0; i<ppf->ntapes; i++) {
-      if (ppf->domain != (ppf->vecpf)[i]->Domain())
-        Rf_warning("Domain has changed in an invalid way");
-    }
-  } else {
-    Rf_error("Unknown function pointer");
+    return R_NilValue;
   }
-  return R_NilValue;
-}
 #endif
 
 #ifdef CPPAD_FRAMEWORK
-/** \internal \brief Transform an existing ADFun object */
-SEXP TransformADFunObject(SEXP f, SEXP control)
-{
-  int mustWork = getListInteger(control, "mustWork", 1);
-  if (mustWork)
-    Rf_error("Not supported for CPPAD_FRAMEWORK");
-  return R_NilValue;
-}
+  /** \internal \brief Transform an existing ADFun object */
+  SEXP TransformADFunObject(SEXP f, SEXP control)
+  {
+    int mustWork = getListInteger(control, "mustWork", 1);
+    if (mustWork)
+      Rf_error("Not supported for CPPAD_FRAMEWORK");
+    return R_NilValue;
+  }
 #endif
 
   /* --- InfoADFunObject ---------------------------------------------------- */
 
 #ifdef TMBAD_FRAMEWORK
-  SEXP InfoADFunObject(SEXP f) {
+  SEXP InfoADFunObject(SEXP f)
+  {
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
-    if (Rf_isNull(f)) Rf_error("Expected external pointer - got NULL");
+    if (Rf_isNull(f))
+      Rf_error("Expected external pointer - got NULL");
     int num_tapes = get_num_tapes(f);
     if (num_tapes >= 2)
       Rf_error("'InfoADFunObject' is only available for tapes with one thread");
-    adfun* pf;
+    adfun *pf;
     if (num_tapes == 0)
-      pf = (adfun*) R_ExternalPtrAddr(f);
-    else {
-      pf = ( (parallelADFun<double>*) R_ExternalPtrAddr(f) ) -> vecpf[0];
+      pf = (adfun *)R_ExternalPtrAddr(f);
+    else
+    {
+      pf = ((parallelADFun<double> *)R_ExternalPtrAddr(f))->vecpf[0];
     }
     SEXP ans, names;
     PROTECT(ans = Rf_allocVector(VECSXP, 6));
     PROTECT(names = Rf_allocVector(STRSXP, 6));
     int i = 0;
-#define GET_INFO(EXPR)                          \
-    SET_VECTOR_ELT(ans, i, asSEXP(EXPR));       \
-    SET_STRING_ELT(names, i, Rf_mkChar(#EXPR)); \
-    i++;
+#define GET_INFO(EXPR)                        \
+  SET_VECTOR_ELT(ans, i, asSEXP(EXPR));       \
+  SET_STRING_ELT(names, i, Rf_mkChar(#EXPR)); \
+  i++;
     // begin
-    std::vector<bool> a = pf -> activeDomain();
+    std::vector<bool> a = pf->activeDomain();
     std::vector<int> ai(a.begin(), a.end());
     vector<int> activeDomain(ai);
     GET_INFO(activeDomain);
@@ -1781,7 +2169,7 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
     GET_INFO(Range);
     // end
 #undef GET_INFO
-    Rf_setAttrib(ans,R_NamesSymbol,names);
+    Rf_setAttrib(ans, R_NamesSymbol, names);
     UNPROTECT(2);
     return ans;
   }
@@ -1790,16 +2178,16 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
 #ifdef CPPAD_FRAMEWORK
   SEXP InfoADFunObject(SEXP f)
   {
-    ADFun<double>* pf;
-    pf = (ADFun<double>*) R_ExternalPtrAddr(f);
+    ADFun<double> *pf;
+    pf = (ADFun<double> *)R_ExternalPtrAddr(f);
     SEXP ans, names;
     PROTECT(ans = Rf_allocVector(VECSXP, 12));
     PROTECT(names = Rf_allocVector(STRSXP, 12));
     int i = 0;
-#define GET_MORE_INFO(MEMBER)                           \
-    SET_VECTOR_ELT(ans, i, asSEXP(int(pf->MEMBER())));  \
-    SET_STRING_ELT(names, i, Rf_mkChar(#MEMBER));       \
-    i++;
+#define GET_MORE_INFO(MEMBER)                        \
+  SET_VECTOR_ELT(ans, i, asSEXP(int(pf->MEMBER()))); \
+  SET_STRING_ELT(names, i, Rf_mkChar(#MEMBER));      \
+  i++;
     GET_MORE_INFO(Domain);
     GET_MORE_INFO(Range);
     GET_MORE_INFO(size_op);
@@ -1813,7 +2201,7 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
     GET_MORE_INFO(size_VecAD);
     GET_MORE_INFO(Memory);
 #undef GET_MORE_INFO
-    Rf_setAttrib(ans,R_NamesSymbol,names);
+    Rf_setAttrib(ans, R_NamesSymbol, names);
     UNPROTECT(2);
     return ans;
   }
@@ -1823,23 +2211,26 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
   /** \internal \brief Call tape optimization function in CppAD */
   SEXP optimizeADFunObject(SEXP f)
   {
-    SEXP tag=R_ExternalPtrTag(f);
-    if(tag == Rf_install("ADFun")){
-      ADFun<double>* pf;
-      pf=(ADFun<double>*)R_ExternalPtrAddr(f);
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag == Rf_install("ADFun"))
+    {
+      ADFun<double> *pf;
+      pf = (ADFun<double> *)R_ExternalPtrAddr(f);
       pf->optimize();
     }
-    if(tag == Rf_install("parallelADFun")){
-      parallelADFun<double>* pf;
-      pf=(parallelADFun<double>*)R_ExternalPtrAddr(f);
-      pf->optimize();      
+    if (tag == Rf_install("parallelADFun"))
+    {
+      parallelADFun<double> *pf;
+      pf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      pf->optimize();
     }
     return R_NilValue;
   }
 #endif
 
   /** \internal \brief Get tag of external pointer */
-  SEXP getTag(SEXP f){
+  SEXP getTag(SEXP f)
+  {
     return R_ExternalPtrTag(f);
   }
 
@@ -1848,16 +2239,19 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
   {
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
-    TMB_TRY {
-      if(Rf_isNull(f))Rf_error("Expected external pointer - got NULL");
-      SEXP tag=R_ExternalPtrTag(f);
-      if(tag == Rf_install("ADFun"))
-	return EvalADFunObjectTemplate< adfun >(f,theta,control);
-      if(tag == Rf_install("parallelADFun"))
-        return EvalADFunObjectTemplate<parallelADFun<double> >(f,theta,control);
+    TMB_TRY
+    {
+      if (Rf_isNull(f))
+        Rf_error("Expected external pointer - got NULL");
+      SEXP tag = R_ExternalPtrTag(f);
+      if (tag == Rf_install("ADFun"))
+        return EvalADFunObjectTemplate<adfun>(f, theta, control);
+      if (tag == Rf_install("parallelADFun"))
+        return EvalADFunObjectTemplate<parallelADFun<double>>(f, theta, control);
       Rf_error("NOT A KNOWN FUNCTION POINTER");
     }
-    TMB_CATCH {
+    TMB_CATCH
+    {
       TMB_ERROR_BAD_ALLOC;
     }
   }
@@ -1866,110 +2260,130 @@ SEXP TransformADFunObject(SEXP f, SEXP control)
 #ifdef CPPAD_FRAMEWORK
   SEXP EvalADFunObject(SEXP f, SEXP theta, SEXP control)
   {
-    TMB_TRY {
-      if(Rf_isNull(f))Rf_error("Expected external pointer - got NULL");
-      SEXP tag=R_ExternalPtrTag(f);
-      if(tag == Rf_install("ADFun"))
-	return EvalADFunObjectTemplate<ADFun<double> >(f,theta,control);
-      if(tag == Rf_install("parallelADFun"))
-	return EvalADFunObjectTemplate<parallelADFun<double> >(f,theta,control);
+    TMB_TRY
+    {
+      if (Rf_isNull(f))
+        Rf_error("Expected external pointer - got NULL");
+      SEXP tag = R_ExternalPtrTag(f);
+      if (tag == Rf_install("ADFun"))
+        return EvalADFunObjectTemplate<ADFun<double>>(f, theta, control);
+      if (tag == Rf_install("parallelADFun"))
+        return EvalADFunObjectTemplate<parallelADFun<double>>(f, theta, control);
       Rf_error("NOT A KNOWN FUNCTION POINTER");
     }
-    TMB_CATCH {
+    TMB_CATCH
+    {
       TMB_ERROR_BAD_ALLOC;
     }
   }
 #endif
 
-SEXP getSetGlobalPtr(SEXP ptr) {
+  SEXP getSetGlobalPtr(SEXP ptr)
+  {
 #ifdef TMBAD_FRAMEWORK
-  SEXP global_ptr_tag = Rf_install("global_ptr");
-  if (!Rf_isNull(ptr)) {
-    SEXP tag = R_ExternalPtrTag(ptr);
-    if (tag != global_ptr_tag) Rf_error("Invalid pointer type");
-    TMBad::global_ptr = (TMBad::global**) R_ExternalPtrAddr(ptr);
-  }
-  SEXP res = R_MakeExternalPtr( (void*) TMBad::global_ptr, global_ptr_tag, R_NilValue);
-  return res;
+    SEXP global_ptr_tag = Rf_install("global_ptr");
+    if (!Rf_isNull(ptr))
+    {
+      SEXP tag = R_ExternalPtrTag(ptr);
+      if (tag != global_ptr_tag)
+        Rf_error("Invalid pointer type");
+      TMBad::global_ptr = (TMBad::global **)R_ExternalPtrAddr(ptr);
+    }
+    SEXP res = R_MakeExternalPtr((void *)TMBad::global_ptr, global_ptr_tag, R_NilValue);
+    return res;
 #else
-  return R_NilValue;
+    return R_NilValue;
 #endif
-}
+  }
 
-  SEXP tmbad_print(SEXP f, SEXP control) {
+  SEXP tmbad_print(SEXP f, SEXP control)
+  {
 #ifdef TMBAD_FRAMEWORK
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
     int num_tapes = get_num_tapes(f);
-    adfun* pf;
+    adfun *pf;
     if (num_tapes == 0)
-      pf = (adfun*) R_ExternalPtrAddr(f);
-    else {
+      pf = (adfun *)R_ExternalPtrAddr(f);
+    else
+    {
       int i = getListInteger(control, "i", 0);
-      pf = ( (parallelADFun<double>*) R_ExternalPtrAddr(f) ) -> vecpf[i];
+      pf = ((parallelADFun<double> *)R_ExternalPtrAddr(f))->vecpf[i];
     }
     std::string method =
-      CHAR(STRING_ELT(getListElement(control, "method"), 0));
-    if (method == "num_tapes") { // Get number of tapes
+        CHAR(STRING_ELT(getListElement(control, "method"), 0));
+    if (method == "num_tapes")
+    { // Get number of tapes
       return Rf_ScalarInteger(num_tapes);
     }
-    else if (method == "tape") { // Print tape
+    else if (method == "tape")
+    { // Print tape
       int depth = getListInteger(control, "depth", 1);
       TMBad::global::print_config cfg;
       cfg.depth = depth;
       pf->glob.print(cfg);
     }
-    else if (method == "dot") { // Print dot format
+    else if (method == "dot")
+    { // Print dot format
       graph2dot(pf->glob, true, Rcout);
     }
-    else if (method == "inv_index") { // Print member
+    else if (method == "inv_index")
+    { // Print member
       using TMBad::operator<<;
       Rcout << pf->glob.inv_index << "\n";
     }
-    else if (method == "dep_index") { // Print member
+    else if (method == "dep_index")
+    { // Print member
       using TMBad::operator<<;
       Rcout << pf->glob.dep_index << "\n";
     }
-    else if (method == "src") { // Print C src code
+    else if (method == "src")
+    { // Print C src code
       TMBad::code_config cfg;
       cfg.gpu = false;
       cfg.asm_comments = false;
       cfg.cout = &Rcout;
       *cfg.cout << "#include <cmath>" << std::endl;
       *cfg.cout
-        << "template<class T>T sign(const T &x) { return (x > 0) - (x < 0); }"
-        << std::endl;
+          << "template<class T>T sign(const T &x) { return (x > 0) - (x < 0); }"
+          << std::endl;
       TMBad::global glob = pf->glob; // Invoke deep copy
       TMBad::compress(glob);
       write_forward(glob, cfg);
       write_reverse(glob, cfg);
     }
-    else if (method == "op") {
+    else if (method == "op")
+    {
       int name = getListInteger(control, "name", 0);
       int address = getListInteger(control, "address", 0);
       int input_size = getListInteger(control, "input_size", 0);
       int output_size = getListInteger(control, "output_size", 0);
       size_t n = pf->glob.opstack.size();
       SEXP ans = PROTECT(Rf_allocVector(STRSXP, n));
-      for (size_t i=0; i<n; i++) {
+      for (size_t i = 0; i < n; i++)
+      {
         std::stringstream strm;
-        if (address)     strm << (void*) pf->glob.opstack[i] << " ";
-        if (name)        strm << pf->glob.opstack[i]->op_name() << " ";
-        if (input_size)  strm << pf->glob.opstack[i]->input_size();
-        if (output_size) strm << pf->glob.opstack[i]->output_size();
-        const std::string& tmp = strm.str();
+        if (address)
+          strm << (void *)pf->glob.opstack[i] << " ";
+        if (name)
+          strm << pf->glob.opstack[i]->op_name() << " ";
+        if (input_size)
+          strm << pf->glob.opstack[i]->input_size();
+        if (output_size)
+          strm << pf->glob.opstack[i]->output_size();
+        const std::string &tmp = strm.str();
         SET_STRING_ELT(ans, i, Rf_mkChar(tmp.c_str()));
       }
       UNPROTECT(1);
       return ans;
     }
-    else {
+    else
+    {
       Rf_error("Unknown method: %s", method.c_str());
     }
 #endif
     return R_NilValue;
   }
-  
 }
 
 /* Double interface */
@@ -1979,74 +2393,90 @@ extern "C"
   /* How to garbage collect a DoubleFun object pointer */
   void finalizeDoubleFun(SEXP x)
   {
-    objective_function<double>* ptr=(objective_function<double>*)R_ExternalPtrAddr(x);
-    if(ptr!=NULL)delete ptr;
+    objective_function<double> *ptr = (objective_function<double> *)R_ExternalPtrAddr(x);
+    if (ptr != NULL)
+      delete ptr;
     memory_manager.CallCFinalizer(x);
   }
-  
+
   SEXP MakeDoubleFunObject(SEXP data, SEXP parameters, SEXP report, SEXP control)
   {
     /* Some type checking */
-    if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-    if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-    if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
-    
+    if (!Rf_isNewList(data))
+      Rf_error("'data' must be a list");
+    if (!Rf_isNewList(parameters))
+      Rf_error("'parameters' must be a list");
+    if (!Rf_isEnvironment(report))
+      Rf_error("'report' must be an environment");
+
     /* Create DoubleFun pointer */
-    objective_function<double>* pF = NULL;
-    TMB_TRY {
-      pF = new objective_function<double>(data,parameters,report);
+    objective_function<double> *pF = NULL;
+    TMB_TRY
+    {
+      pF = new objective_function<double>(data, parameters, report);
     }
-    TMB_CATCH {
-      if (pF != NULL) delete pF;
+    TMB_CATCH
+    {
+      if (pF != NULL)
+        delete pF;
       TMB_ERROR_BAD_ALLOC;
     }
 
     /* Convert DoubleFun pointer to R_ExternalPtr */
-    SEXP res,ans;
-    PROTECT(res=R_MakeExternalPtr((void*) pF,Rf_install("DoubleFun"),R_NilValue));
-    PROTECT(ans=ptrList(res));
+    SEXP res, ans;
+    PROTECT(res = R_MakeExternalPtr((void *)pF, Rf_install("DoubleFun"), R_NilValue));
+    PROTECT(ans = ptrList(res));
     UNPROTECT(2);
     return ans;
   }
 
-  
   SEXP EvalDoubleFunObject(SEXP f, SEXP theta, SEXP control)
   {
-    TMB_TRY {
+    TMB_TRY
+    {
       int do_simulate = getListInteger(control, "do_simulate");
       int get_reportdims = getListInteger(control, "get_reportdims");
-      objective_function<double>* pf;
-      pf = (objective_function<double>*) R_ExternalPtrAddr(f);
-      pf -> sync_data();
-      PROTECT( theta=Rf_coerceVector(theta,REALSXP) );
+      objective_function<double> *pf;
+      pf = (objective_function<double> *)R_ExternalPtrAddr(f);
+      pf->sync_data();
+      PROTECT(theta = Rf_coerceVector(theta, REALSXP));
       int n = pf->theta.size();
-      if (LENGTH(theta)!=n) Rf_error("Wrong parameter length.");
+      if (LENGTH(theta) != n)
+        Rf_error("Wrong parameter length.");
       vector<double> x(n);
-      for(int i=0;i<n;i++) x[i] = REAL(theta)[i];
-      pf->theta=x;
+      for (int i = 0; i < n; i++)
+        x[i] = REAL(theta)[i];
+      pf->theta = x;
       /* Since we are actually evaluating objective_function::operator() (not
-	 an ADFun object) we should remember to initialize parameter-index. */
-      pf->index=0;
+   an ADFun object) we should remember to initialize parameter-index. */
+      pf->index = 0;
       pf->parnames.resize(0); // To avoid mem leak.
       pf->reportvector.clear();
+      pf->uncertaintyvector.clear();
       SEXP res;
-      GetRNGstate();   /* Get seed from R */
-      if(do_simulate) pf->set_simulate( true );
-      PROTECT( res = asSEXP( pf->operator()() ) );
-      if(do_simulate) {
-        pf->set_simulate( false );
+      GetRNGstate(); /* Get seed from R */
+      if (do_simulate)
+        pf->set_simulate(true);
+      PROTECT(res = asSEXP(pf->operator()()));
+      if (do_simulate)
+      {
+        pf->set_simulate(false);
         PutRNGstate(); /* Write seed back to R */
       }
-      if(get_reportdims) {
-        SEXP reportdims;
-        PROTECT( reportdims = pf -> reportvector.reportdims() );
-        Rf_setAttrib( res, Rf_install("reportdims"), reportdims);
-        UNPROTECT(1);
+      if (get_reportdims)
+      {
+        SEXP reportdims, uncertaintyinfo;
+        PROTECT(reportdims = pf->reportvector.reportdims());
+        PROTECT(uncertaintyinfo = pf->uncertaintyvector.info());
+        Rf_setAttrib(res, Rf_install("reportdims"), reportdims);
+        Rf_setAttrib(res, Rf_install("uncertaintyinfo"), uncertaintyinfo);
+        UNPROTECT(2);
       }
       UNPROTECT(2);
       return res;
     }
-    TMB_CATCH {
+    TMB_CATCH
+    {
       TMB_ERROR_BAD_ALLOC;
     }
   }
@@ -2056,72 +2486,82 @@ extern "C"
    We spend a function evaluation on getting the parameter order (!) */
   SEXP getParameterOrder(SEXP data, SEXP parameters, SEXP report, SEXP control)
   {
-    TMB_TRY {
+    TMB_TRY
+    {
       /* Some type checking */
-      if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-      if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-      if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
-      objective_function<double> F(data,parameters,report);
+      if (!Rf_isNewList(data))
+        Rf_error("'data' must be a list");
+      if (!Rf_isNewList(parameters))
+        Rf_error("'parameters' must be a list");
+      if (!Rf_isEnvironment(report))
+        Rf_error("'report' must be an environment");
+      objective_function<double> F(data, parameters, report);
       F(); // Run through user template
       return F.parNames();
     }
-    TMB_CATCH {
+    TMB_CATCH
+    {
       TMB_ERROR_BAD_ALLOC;
     }
   }
 
 } /* Double interface */
 
-
 #ifdef TMBAD_FRAMEWORK
-TMBad::ADFun< TMBad::ad_aug >* MakeADGradObject_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region=-1)
+TMBad::ADFun<TMBad::ad_aug> *MakeADGradObject_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region = -1)
 {
   typedef TMBad::ad_aug ad;
   typedef TMBad::ADFun<ad> adfun;
   SEXP f = getListElement(control, "f");
-  adfun* pf;
-  bool allocate_new_pf = ( f == R_NilValue );
-  if ( ! allocate_new_pf ) {
+  adfun *pf;
+  bool allocate_new_pf = (f == R_NilValue);
+  if (!allocate_new_pf)
+  {
     if (parallel_region == -1)
-      pf = (adfun*) R_ExternalPtrAddr(f);
+      pf = (adfun *)R_ExternalPtrAddr(f);
     else
-      pf = ((parallelADFun<double>*) R_ExternalPtrAddr(f))->vecpf[parallel_region];
-  } else {
+      pf = ((parallelADFun<double> *)R_ExternalPtrAddr(f))->vecpf[parallel_region];
+  }
+  else
+  {
     SEXP control_adfun = R_NilValue;
     pf = MakeADFunObject_(data, parameters, report, control_adfun, parallel_region);
   }
   // Optionally skip gradient components (only need 'random' part of gradient)
   SEXP random = getListElement(control, "random");
-  if (random != R_NilValue) {
+  if (random != R_NilValue)
+  {
     int set_tail = INTEGER(random)[0] - 1;
     std::vector<TMBad::Index> r(1, set_tail);
-    pf -> set_tail(r);
+    pf->set_tail(r);
   }
-  adfun* pgf = new adfun (pf->JacFun());
-  pf -> unset_tail(); // Not really needed
-  if (allocate_new_pf) delete pf;
+  adfun *pgf = new adfun(pf->JacFun());
+  pf->unset_tail(); // Not really needed
+  if (allocate_new_pf)
+    delete pf;
   return pgf;
 }
 #endif
 
 #ifdef CPPAD_FRAMEWORK
-ADFun< double >* MakeADGradObject_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region=-1)
+ADFun<double> *MakeADGradObject_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region = -1)
 {
   /* Create ADFun pointer */
-  objective_function< AD<AD<double> > > F(data,parameters,report);
+  objective_function<AD<AD<double>>> F(data, parameters, report);
   F.set_parallel_region(parallel_region);
-  int n=F.theta.size();
+  int n = F.theta.size();
   Independent(F.theta);
-  vector< AD<AD<double> > > y(1);
-  y[0]=F.evalUserTemplate();
-  ADFun<AD<double> > tmp(F.theta,y);
+  vector<AD<AD<double>>> y(1);
+  y[0] = F.evalUserTemplate();
+  ADFun<AD<double>> tmp(F.theta, y);
   tmp.optimize(); /* Remove 'dead' operations (could result in nan derivatives) */
-  vector<AD<double> > x(n);
-  for(int i=0;i<n;i++)x[i]=CppAD::Value(F.theta[i]);
-  vector<AD<double> > yy(n);
+  vector<AD<double>> x(n);
+  for (int i = 0; i < n; i++)
+    x[i] = CppAD::Value(F.theta[i]);
+  vector<AD<double>> yy(n);
   Independent(x);
-  yy=tmp.Jacobian(x);
-  ADFun< double >* pf = new ADFun< double >(x,yy);
+  yy = tmp.Jacobian(x);
+  ADFun<double> *pf = new ADFun<double>(x, yy);
   return pf;
 }
 #endif
@@ -2135,72 +2575,89 @@ extern "C"
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
 
-    adfun* pf = NULL;
+    adfun *pf = NULL;
     /* Some type checking */
-    if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-    if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-    if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
+    if (!Rf_isNewList(data))
+      Rf_error("'data' must be a list");
+    if (!Rf_isNewList(parameters))
+      Rf_error("'parameters' must be a list");
+    if (!Rf_isEnvironment(report))
+      Rf_error("'report' must be an environment");
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res=NULL;
-    objective_function< double > F(data,parameters,report);
+    SEXP par, res = NULL;
+    objective_function<double> F(data, parameters, report);
 #ifdef _OPENMP
     SEXP f = getListElement(control, "f");
     int n = get_num_tapes(f);
-    if (n==0) // No tapes? Count!
+    if (n == 0)                       // No tapes? Count!
       n = F.count_parallel_regions(); // Evaluates user template
 #else
     F.count_parallel_regions(); // Evaluates user template
 #endif
-    PROTECT(par=F.defaultpar());
+    PROTECT(par = F.defaultpar());
 
-    if(_openmp){ // Parallel mode
+    if (_openmp)
+    { // Parallel mode
 #ifdef _OPENMP
-      if(config.trace.parallel)
-	Rcout << n << " regions found.\n";
-      if (n==0) n++; // No explicit parallel accumulation
+      if (config.trace.parallel)
+        Rcout << n << " regions found.\n";
+      if (n == 0)
+        n++;            // No explicit parallel accumulation
       start_parallel(); /* Start threads */
-      vector< adfun* > pfvec(n);
-      const char* bad_thread_alloc = NULL;
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-      for(int i=0;i<n;i++){
-	TMB_TRY {
-	  pfvec[i] = NULL;
-	  pfvec[i] = MakeADGradObject_(data, parameters, report, control, i);
-	  if (config.optimize.instantly) pfvec[i]->optimize();
-	}
-	TMB_CATCH {
-          if (pfvec[i] != NULL) delete pfvec[i];
+      vector<adfun *> pfvec(n);
+      const char *bad_thread_alloc = NULL;
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+      for (int i = 0; i < n; i++)
+      {
+        TMB_TRY
+        {
+          pfvec[i] = NULL;
+          pfvec[i] = MakeADGradObject_(data, parameters, report, control, i);
+          if (config.optimize.instantly)
+            pfvec[i]->optimize();
+        }
+        TMB_CATCH
+        {
+          if (pfvec[i] != NULL)
+            delete pfvec[i];
           bad_thread_alloc = excpt.what();
         }
       }
-      if (bad_thread_alloc) {
-	TMB_ERROR_BAD_THREAD_ALLOC;
+      if (bad_thread_alloc)
+      {
+        TMB_ERROR_BAD_THREAD_ALLOC;
       }
-      parallelADFun<double>* ppf=new parallelADFun<double>(pfvec);
+      parallelADFun<double> *ppf = new parallelADFun<double>(pfvec);
       /* Convert parallel ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) ppf,Rf_install("parallelADFun"),R_NilValue));
+      PROTECT(res = R_MakeExternalPtr((void *)ppf, Rf_install("parallelADFun"), R_NilValue));
       // R_RegisterCFinalizer(res,finalizeparallelADFun);
 #endif
-    } else { // Serial mode
+    }
+    else
+    { // Serial mode
       /* Actual work: tape creation */
-      TMB_TRY {
+      TMB_TRY
+      {
         pf = NULL;
         pf = MakeADGradObject_(data, parameters, report, control, -1);
-        if(config.optimize.instantly)pf->optimize();
+        if (config.optimize.instantly)
+          pf->optimize();
       }
-      TMB_CATCH {
-	if (pf != NULL) delete pf;
-	TMB_ERROR_BAD_ALLOC;
+      TMB_CATCH
+      {
+        if (pf != NULL)
+          delete pf;
+        TMB_ERROR_BAD_ALLOC;
       }
       /* Convert ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) pf,Rf_install("ADFun"),R_NilValue));
+      PROTECT(res = R_MakeExternalPtr((void *)pf, Rf_install("ADFun"), R_NilValue));
     }
 
     /* Return ptrList */
     SEXP ans;
-    Rf_setAttrib(res,Rf_install("par"),par);
-    PROTECT(ans=ptrList(res));
+    Rf_setAttrib(res, Rf_install("par"), par);
+    PROTECT(ans = ptrList(res));
     UNPROTECT(3);
     return ans;
   } // MakeADGradObject
@@ -2210,74 +2667,90 @@ extern "C"
   /** \internal \brief Tape the gradient using nested AD types */
   SEXP MakeADGradObject(SEXP data, SEXP parameters, SEXP report, SEXP control)
   {
-    ADFun<double>* pf = NULL;
+    ADFun<double> *pf = NULL;
     /* Some type checking */
-    if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-    if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-    if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
+    if (!Rf_isNewList(data))
+      Rf_error("'data' must be a list");
+    if (!Rf_isNewList(parameters))
+      Rf_error("'parameters' must be a list");
+    if (!Rf_isEnvironment(report))
+      Rf_error("'report' must be an environment");
 
     /* Get the default parameter vector (tiny overhead) */
-    SEXP par,res=NULL;
-    objective_function< double > F(data,parameters,report);
+    SEXP par, res = NULL;
+    objective_function<double> F(data, parameters, report);
 #ifdef _OPENMP
-    int n=F.count_parallel_regions(); // Evaluates user template
+    int n = F.count_parallel_regions(); // Evaluates user template
 #else
     F.count_parallel_regions(); // Evaluates user template
 #endif
-    PROTECT(par=F.defaultpar());
+    PROTECT(par = F.defaultpar());
 
-    if(_openmp){ // Parallel mode
+    if (_openmp)
+    { // Parallel mode
 #ifdef _OPENMP
-      if(config.trace.parallel)
-	Rcout << n << " regions found.\n";
-      if (n==0) n++; // No explicit parallel accumulation
+      if (config.trace.parallel)
+        Rcout << n << " regions found.\n";
+      if (n == 0)
+        n++;            // No explicit parallel accumulation
       start_parallel(); /* Start threads */
-      vector< ADFun<double>* > pfvec(n);
-      const char* bad_thread_alloc = NULL;
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-      for(int i=0;i<n;i++){
-	TMB_TRY {
-	  pfvec[i] = NULL;
-	  pfvec[i] = MakeADGradObject_(data, parameters, report, control, i);
-	  if (config.optimize.instantly) pfvec[i]->optimize();
-	}
-	TMB_CATCH {
-          if (pfvec[i] != NULL) delete pfvec[i];
+      vector<ADFun<double> *> pfvec(n);
+      const char *bad_thread_alloc = NULL;
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+      for (int i = 0; i < n; i++)
+      {
+        TMB_TRY
+        {
+          pfvec[i] = NULL;
+          pfvec[i] = MakeADGradObject_(data, parameters, report, control, i);
+          if (config.optimize.instantly)
+            pfvec[i]->optimize();
+        }
+        TMB_CATCH
+        {
+          if (pfvec[i] != NULL)
+            delete pfvec[i];
           bad_thread_alloc = excpt.what();
         }
       }
-      if (bad_thread_alloc) {
-	TMB_ERROR_BAD_THREAD_ALLOC;
+      if (bad_thread_alloc)
+      {
+        TMB_ERROR_BAD_THREAD_ALLOC;
       }
-      parallelADFun<double>* ppf=new parallelADFun<double>(pfvec);
+      parallelADFun<double> *ppf = new parallelADFun<double>(pfvec);
       /* Convert parallel ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) ppf,Rf_install("parallelADFun"),R_NilValue));
+      PROTECT(res = R_MakeExternalPtr((void *)ppf, Rf_install("parallelADFun"), R_NilValue));
 #endif
-    } else { // Serial mode
+    }
+    else
+    { // Serial mode
       /* Actual work: tape creation */
-      TMB_TRY {
+      TMB_TRY
+      {
         pf = NULL;
         pf = MakeADGradObject_(data, parameters, report, control, -1);
-        if(config.optimize.instantly)pf->optimize();
+        if (config.optimize.instantly)
+          pf->optimize();
       }
-      TMB_CATCH {
-	if (pf != NULL) delete pf;
-	TMB_ERROR_BAD_ALLOC;
+      TMB_CATCH
+      {
+        if (pf != NULL)
+          delete pf;
+        TMB_ERROR_BAD_ALLOC;
       }
       /* Convert ADFun pointer to R_ExternalPtr */
-      PROTECT(res=R_MakeExternalPtr((void*) pf,Rf_install("ADFun"),R_NilValue));
+      PROTECT(res = R_MakeExternalPtr((void *)pf, Rf_install("ADFun"), R_NilValue));
     }
 
     /* Return ptrList */
     SEXP ans;
-    Rf_setAttrib(res,Rf_install("par"),par);
-    PROTECT(ans=ptrList(res));
+    Rf_setAttrib(res, Rf_install("par"), par);
+    PROTECT(ans = ptrList(res));
     UNPROTECT(3);
     return ans;
   } // MakeADGradObject
 #endif
 }
-
 
 /** \internal \brief Tape the hessian[cbind(i,j)] using nested AD types.
 
@@ -2286,42 +2759,48 @@ extern "C"
           zero). Negative subscripts are not allowed.
 */
 #ifdef TMBAD_FRAMEWORK
-sphess_t< TMBad::ADFun< TMBad::ad_aug > > MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region=-1)
+sphess_t<TMBad::ADFun<TMBad::ad_aug>> MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region = -1)
 {
   typedef TMBad::ad_aug ad;
   typedef TMBad::ADFun<ad> adfun;
   typedef sphess_t<adfun> sphess;
   SEXP gf = getListElement(control, "gf");
-  adfun* pgf;
-  bool allocate_new_pgf = ( gf == R_NilValue );
-  if ( ! allocate_new_pgf ) {
+  adfun *pgf;
+  bool allocate_new_pgf = (gf == R_NilValue);
+  if (!allocate_new_pgf)
+  {
     if (parallel_region == -1)
-      pgf = (adfun*) R_ExternalPtrAddr(gf);
+      pgf = (adfun *)R_ExternalPtrAddr(gf);
     else
-      pgf = ((parallelADFun<double>*) R_ExternalPtrAddr(gf))->vecpf[parallel_region];
-  } else {
+      pgf = ((parallelADFun<double> *)R_ExternalPtrAddr(gf))->vecpf[parallel_region];
+  }
+  else
+  {
     SEXP control_adgrad = R_NilValue;
     pgf = MakeADGradObject_(data, parameters, report, control_adgrad, parallel_region);
   }
-  if (config.optimize.instantly) pgf->optimize();
+  if (config.optimize.instantly)
+    pgf->optimize();
   int n = pgf->Domain();
   std::vector<bool> keepcol(n, true);
   SEXP skip = getListElement(control, "skip");
-  for(int i=0; i<LENGTH(skip); i++) {
-    keepcol[ INTEGER(skip)[i] - 1 ] = false; // skip is R-index !
+  for (int i = 0; i < LENGTH(skip); i++)
+  {
+    keepcol[INTEGER(skip)[i] - 1] = false; // skip is R-index !
   }
   TMBad::SpJacFun_config spjacfun_cfg;
   spjacfun_cfg.index_remap = false;
-  spjacfun_cfg.compress    = config.tmbad.sparse_hessian_compress;
+  spjacfun_cfg.compress = config.tmbad.sparse_hessian_compress;
   TMBad::Sparse<adfun> h = pgf->SpJacFun(keepcol, keepcol, spjacfun_cfg);
-  if (allocate_new_pgf) delete pgf;
+  if (allocate_new_pgf)
+    delete pgf;
   // NB: Lower triangle, column major =
   //     Transpose of upper triangle, row major
-  h.subset_inplace( h.row() <= h.col() ); // Upper triangle, row major
-  h.transpose_inplace();                  // Lower triangle, col major
-  if (config.optimize.instantly)          // Optimize now or later ?
+  h.subset_inplace(h.row() <= h.col()); // Upper triangle, row major
+  h.transpose_inplace();                // Lower triangle, col major
+  if (config.optimize.instantly)        // Optimize now or later ?
     h.optimize();
-  adfun* phf = new adfun( h );
+  adfun *phf = new adfun(h);
   // Convert h.i and h.j to vector<int>
   vector<TMBad::Index> h_i(h.i);
   vector<TMBad::Index> h_j(h.j);
@@ -2337,52 +2816,62 @@ sphess_t< TMBad::ADFun< TMBad::ad_aug > > MakeADHessObject2_(SEXP data, SEXP par
           zero). Negative subscripts are not allowed.
 */
 #ifdef CPPAD_FRAMEWORK
-sphess MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region=-1)
+sphess MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control, int parallel_region = -1)
 {
   /* Some type checking */
-  if(!Rf_isNewList(data))Rf_error("'data' must be a list");
-  if(!Rf_isNewList(parameters))Rf_error("'parameters' must be a list");
-  if(!Rf_isEnvironment(report))Rf_error("'report' must be an environment");
-  
+  if (!Rf_isNewList(data))
+    Rf_error("'data' must be a list");
+  if (!Rf_isNewList(parameters))
+    Rf_error("'parameters' must be a list");
+  if (!Rf_isEnvironment(report))
+    Rf_error("'report' must be an environment");
+
   /* Prepare stuff */
-  objective_function< AD<AD<AD<double> > > > F(data,parameters,report);
+  objective_function<AD<AD<AD<double>>>> F(data, parameters, report);
   F.set_parallel_region(parallel_region);
   int n = F.theta.size();
   SEXP skip = getListElement(control, "skip");
-  vector<bool> keepcol(n); // Scatter for fast lookup 
-  for(int i=0; i<n; i++){
-    keepcol[i]=true;
+  vector<bool> keepcol(n); // Scatter for fast lookup
+  for (int i = 0; i < n; i++)
+  {
+    keepcol[i] = true;
   }
-  for(int i=0; i<LENGTH(skip); i++){
-    keepcol[INTEGER(skip)[i]-1]=false; // skip is R-index !
+  for (int i = 0; i < LENGTH(skip); i++)
+  {
+    keepcol[INTEGER(skip)[i] - 1] = false; // skip is R-index !
   }
 #define KEEP_COL(col) (keepcol[col])
-#define KEEP_ROW(row,col) ( KEEP_COL(row) && (row>=col) )
+#define KEEP_ROW(row, col) (KEEP_COL(row) && (row >= col))
 
   /* Tape 1: Function R^n -> R */
   Independent(F.theta);
-  vector< AD<AD<AD<double> > > > y(1);
+  vector<AD<AD<AD<double>>>> y(1);
   y[0] = F.evalUserTemplate();
-  ADFun<AD<AD<double> > > tape1(F.theta, y);
+  ADFun<AD<AD<double>>> tape1(F.theta, y);
 
   /* Tape 2: Gradient R^n -> R^n   (and optimize) */
-  vector<AD<AD<double> > > xx(n);
-  for(int i=0; i<n; i++) xx[i] = CppAD::Value(F.theta[i]);
-  vector<AD<AD<double> > > yy(n);
+  vector<AD<AD<double>>> xx(n);
+  for (int i = 0; i < n; i++)
+    xx[i] = CppAD::Value(F.theta[i]);
+  vector<AD<AD<double>>> yy(n);
   Independent(xx);
   yy = tape1.Jacobian(xx);
-  ADFun<AD<double > > tape2(xx,yy);
-  if (config.optimize.instantly) tape2.optimize();
+  ADFun<AD<double>> tape2(xx, yy);
+  if (config.optimize.instantly)
+    tape2.optimize();
 
   /* Tape 3: Hessian  R^n -> R^m   (optimize later) */
   tape2.my_init(keepcol);
   int colisize;
-  int m=0; // Count number of non-zeros (m)
-  for(int i=0; i<int(tape2.colpattern.size()); i++){
+  int m = 0; // Count number of non-zeros (m)
+  for (int i = 0; i < int(tape2.colpattern.size()); i++)
+  {
     colisize = tape2.colpattern[i].size();
-    if(KEEP_COL(i)){
-      for(int j=0; j<colisize; j++){
-	m += KEEP_ROW( tape2.colpattern[i][j] , i);
+    if (KEEP_COL(i))
+    {
+      for (int j = 0; j < colisize; j++)
+      {
+        m += KEEP_ROW(tape2.colpattern[i][j], i);
       }
     }
   }
@@ -2390,33 +2879,39 @@ sphess MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control,
   vector<int> rowindex(m);
   vector<int> colindex(m);
   // Prepare reverse sweep for Hessian columns
-  vector<AD<double> > u(n);
-  vector<AD<double> > v(n);
-  for(int i = 0; i < n; i++) v[i] = 0.0;
-  vector<AD<double> > xxx(n);
-  for(int i=0; i<n; i++) xxx[i]=CppAD::Value(CppAD::Value(F.theta[i]));
-  vector<AD<double> > yyy(m);
-  CppAD::vector<int>* icol;
+  vector<AD<double>> u(n);
+  vector<AD<double>> v(n);
+  for (int i = 0; i < n; i++)
+    v[i] = 0.0;
+  vector<AD<double>> xxx(n);
+  for (int i = 0; i < n; i++)
+    xxx[i] = CppAD::Value(CppAD::Value(F.theta[i]));
+  vector<AD<double>> yyy(m);
+  CppAD::vector<int> *icol;
   // Do sweeps and fill in non-zero index pairs
   Independent(xxx);
   tape2.Forward(0, xxx);
-  int k=0;
-  for(int i = 0; i < n; i++){
-    if (KEEP_COL(i)) {
+  int k = 0;
+  for (int i = 0; i < n; i++)
+  {
+    if (KEEP_COL(i))
+    {
       tape2.myReverse(1, v, i /*range comp*/, u /*domain*/);
       icol = &tape2.colpattern[i];
-      for(int j=0; j<int(icol->size()); j++){
-	if(KEEP_ROW( icol->operator[](j), i )){
-	  rowindex[k] = icol->operator[](j);
-	  colindex[k] = i;
-	  yyy[k] = u[icol->operator[](j)];
-	  k++;
-	}
+      for (int j = 0; j < int(icol->size()); j++)
+      {
+        if (KEEP_ROW(icol->operator[](j), i))
+        {
+          rowindex[k] = icol->operator[](j);
+          colindex[k] = i;
+          yyy[k] = u[icol->operator[](j)];
+          k++;
+        }
       }
     }
   }
-  ADFun< double >* ptape3 = new ADFun< double >;
-  ptape3->Dependent(xxx,yyy);
+  ADFun<double> *ptape3 = new ADFun<double>;
+  ptape3->Dependent(xxx, yyy);
   sphess ans(ptape3, rowindex, colindex);
   return ans;
 } // MakeADHessObject2
@@ -2425,88 +2920,98 @@ sphess MakeADHessObject2_(SEXP data, SEXP parameters, SEXP report, SEXP control,
 // kasper: Move to new file e.g. "convert.hpp"
 template <class ADFunType>
 /** \internal \brief Convert sparse matrix H to SEXP format that can be returned to R */
-SEXP asSEXP(const sphess_t<ADFunType> &H, const char* tag)
+SEXP asSEXP(const sphess_t<ADFunType> &H, const char *tag)
 {
-    SEXP par;
-    par=R_NilValue;
-    /* Convert ADFun pointer to R_ExternalPtr */
-    SEXP res;
-    PROTECT( res = R_MakeExternalPtr((void*) H.pf, Rf_install(tag), R_NilValue) );
-    /* Return list */
-    SEXP ans;
-    /* Implicitly protected temporaries */
-    SEXP par_symbol = Rf_install("par");
-    SEXP i_symbol = Rf_install("i");
-    SEXP j_symbol = Rf_install("j");
-    Rf_setAttrib(res, par_symbol, par);
-    Rf_setAttrib(res, i_symbol, asSEXP(H.i));
-    Rf_setAttrib(res, j_symbol, asSEXP(H.j));
-    PROTECT(ans=ptrList(res));
-    UNPROTECT(2);
-    return ans;
+  SEXP par;
+  par = R_NilValue;
+  /* Convert ADFun pointer to R_ExternalPtr */
+  SEXP res;
+  PROTECT(res = R_MakeExternalPtr((void *)H.pf, Rf_install(tag), R_NilValue));
+  /* Return list */
+  SEXP ans;
+  /* Implicitly protected temporaries */
+  SEXP par_symbol = Rf_install("par");
+  SEXP i_symbol = Rf_install("i");
+  SEXP j_symbol = Rf_install("j");
+  Rf_setAttrib(res, par_symbol, par);
+  Rf_setAttrib(res, i_symbol, asSEXP(H.i));
+  Rf_setAttrib(res, j_symbol, asSEXP(H.j));
+  PROTECT(ans = ptrList(res));
+  UNPROTECT(2);
+  return ans;
 }
-
 
 extern "C"
 {
 
 #ifdef TMBAD_FRAMEWORK
 #ifdef _OPENMP
-  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control){
+  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control)
+  {
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
     typedef sphess_t<adfun> sphess;
-    if(config.trace.parallel)
+    if (config.trace.parallel)
       Rcout << "Count num parallel regions\n";
-    objective_function< double > F(data,parameters,report);
+    objective_function<double> F(data, parameters, report);
     SEXP gf = getListElement(control, "gf");
     int n = get_num_tapes(gf);
-    if (n==0) // No tapes? Count!
+    if (n == 0)                       // No tapes? Count!
       n = F.count_parallel_regions(); // Evaluates user template
-    if(config.trace.parallel)
+    if (config.trace.parallel)
       Rcout << n << " regions found.\n";
-    if (n==0) n++; // No explicit parallel accumulation
+    if (n == 0)
+      n++;            // No explicit parallel accumulation
     start_parallel(); /* FIXME: not needed */
     /* parallel test */
-    const char* bad_thread_alloc = NULL;
-    vector<sphess*> Hvec(n);
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-    for (int i=0; i<n; i++) {
-      TMB_TRY {
-	Hvec[i] = NULL;
-	Hvec[i] = new sphess( MakeADHessObject2_(data, parameters, report, control, i) );
-	//optimizeTape( Hvec[i]->pf );
+    const char *bad_thread_alloc = NULL;
+    vector<sphess *> Hvec(n);
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+    for (int i = 0; i < n; i++)
+    {
+      TMB_TRY
+      {
+        Hvec[i] = NULL;
+        Hvec[i] = new sphess(MakeADHessObject2_(data, parameters, report, control, i));
+        // optimizeTape( Hvec[i]->pf );
       }
-      TMB_CATCH {
-        if (Hvec[i] != NULL) {
+      TMB_CATCH
+      {
+        if (Hvec[i] != NULL)
+        {
           delete Hvec[i]->pf;
           delete Hvec[i];
         }
         bad_thread_alloc = excpt.what();
       }
     }
-    if (bad_thread_alloc) {
+    if (bad_thread_alloc)
+    {
       TMB_ERROR_BAD_THREAD_ALLOC;
     }
-    parallelADFun<double>* tmp=new parallelADFun<double>(Hvec);
-    return asSEXP(tmp->convert(),"parallelADFun");
+    parallelADFun<double> *tmp = new parallelADFun<double>(Hvec);
+    return asSEXP(tmp->convert(), "parallelADFun");
   } // MakeADHessObject2
 #else
-  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control){
+  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control)
+  {
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
     typedef sphess_t<adfun> sphess;
-    sphess* pH = NULL;
+    sphess *pH = NULL;
     SEXP ans;
-    TMB_TRY {
-      pH = new sphess( MakeADHessObject2_(data, parameters, report, control, -1) );
-      //optimizeTape( pH->pf );
+    TMB_TRY
+    {
+      pH = new sphess(MakeADHessObject2_(data, parameters, report, control, -1));
+      // optimizeTape( pH->pf );
       ans = asSEXP(*pH, "ADFun");
     }
-    TMB_CATCH {
-      if (pH != NULL) {
-	delete pH->pf;
-	delete pH;
+    TMB_CATCH
+    {
+      if (pH != NULL)
+      {
+        delete pH->pf;
+        delete pH;
       }
       TMB_ERROR_BAD_ALLOC;
     }
@@ -2518,59 +3023,71 @@ extern "C"
 
 #ifdef CPPAD_FRAMEWORK
 #ifdef _OPENMP
-  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control){
-    if(config.trace.parallel)
+  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control)
+  {
+    if (config.trace.parallel)
       Rcout << "Count num parallel regions\n";
-    objective_function< double > F(data,parameters,report);
-    int n=F.count_parallel_regions();
-    if(config.trace.parallel)
+    objective_function<double> F(data, parameters, report);
+    int n = F.count_parallel_regions();
+    if (config.trace.parallel)
       Rcout << n << " regions found.\n";
-    if (n==0) n++; // No explicit parallel accumulation
+    if (n == 0)
+      n++; // No explicit parallel accumulation
 
     start_parallel(); /* Start threads */
 
     /* parallel test */
-    const char* bad_thread_alloc = NULL;
-    vector<sphess*> Hvec(n);
-#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n>1)
-    for (int i=0; i<n; i++) {
-      TMB_TRY {
-	Hvec[i] = NULL;
-	Hvec[i] = new sphess( MakeADHessObject2_(data, parameters, report, control, i) );
-	optimizeTape( Hvec[i]->pf );
+    const char *bad_thread_alloc = NULL;
+    vector<sphess *> Hvec(n);
+#pragma omp parallel for num_threads(config.nthreads) if (config.tape.parallel && n > 1)
+    for (int i = 0; i < n; i++)
+    {
+      TMB_TRY
+      {
+        Hvec[i] = NULL;
+        Hvec[i] = new sphess(MakeADHessObject2_(data, parameters, report, control, i));
+        optimizeTape(Hvec[i]->pf);
       }
-      TMB_CATCH {
-	if (Hvec[i] != NULL) {
-	  delete Hvec[i]->pf;
-	  delete Hvec[i];
-	}
+      TMB_CATCH
+      {
+        if (Hvec[i] != NULL)
+        {
+          delete Hvec[i]->pf;
+          delete Hvec[i];
+        }
         bad_thread_alloc = excpt.what();
       }
     }
-    if (bad_thread_alloc) {
+    if (bad_thread_alloc)
+    {
       TMB_ERROR_BAD_THREAD_ALLOC;
     }
-    parallelADFun<double>* tmp=new parallelADFun<double>(Hvec);
-    for(int i=0; i<n; i++) {
+    parallelADFun<double> *tmp = new parallelADFun<double>(Hvec);
+    for (int i = 0; i < n; i++)
+    {
       delete Hvec[i];
     }
     // Adds finalizer for 'tmp' !!! (so, don't delete tmp...)
-    SEXP ans = asSEXP(tmp->convert(),"parallelADFun");
+    SEXP ans = asSEXP(tmp->convert(), "parallelADFun");
     return ans;
   } // MakeADHessObject2
 #else
-  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control){
-    sphess* pH = NULL;
+  SEXP MakeADHessObject2(SEXP data, SEXP parameters, SEXP report, SEXP control)
+  {
+    sphess *pH = NULL;
     SEXP ans;
-    TMB_TRY {
-      pH = new sphess( MakeADHessObject2_(data, parameters, report, control, -1) );
-      optimizeTape( pH->pf );
+    TMB_TRY
+    {
+      pH = new sphess(MakeADHessObject2_(data, parameters, report, control, -1));
+      optimizeTape(pH->pf);
       ans = asSEXP(*pH, "ADFun");
     }
-    TMB_CATCH {
-      if (pH != NULL) {
-	delete pH->pf;
-	delete pH;
+    TMB_CATCH
+    {
+      if (pH != NULL)
+      {
+        delete pH->pf;
+        delete pH;
       }
       TMB_ERROR_BAD_ALLOC;
     }
@@ -2585,26 +3102,31 @@ extern "C"
 {
 
 #ifdef TMBAD_FRAMEWORK
-  SEXP usingAtomics(){
+  SEXP usingAtomics()
+  {
     SEXP ans;
-    PROTECT(ans = Rf_allocVector(INTSXP,1));
-    INTEGER(ans)[0] = 1; // TMBAD doesn't benefit from knowing if 'false'
+    PROTECT(ans = Rf_allocVector(INTSXP, 1));
+    INTEGER(ans)
+    [0] = 1; // TMBAD doesn't benefit from knowing if 'false'
     UNPROTECT(1);
     return ans;
   }
 #endif
 
 #ifdef CPPAD_FRAMEWORK
-  SEXP usingAtomics(){
+  SEXP usingAtomics()
+  {
     SEXP ans;
-    PROTECT(ans = Rf_allocVector(INTSXP,1));
-    INTEGER(ans)[0] = atomic::atomicFunctionGenerated;
+    PROTECT(ans = Rf_allocVector(INTSXP, 1));
+    INTEGER(ans)
+    [0] = atomic::atomicFunctionGenerated;
     UNPROTECT(1);
     return ans;
   }
 #endif
 
-  SEXP getFramework() {
+  SEXP getFramework()
+  {
     // ans
     SEXP ans;
 #ifdef TMBAD_FRAMEWORK
@@ -2645,85 +3167,95 @@ extern "C"
 
 extern "C"
 {
-  void tmb_forward(SEXP f, const Eigen::VectorXd &x, Eigen::VectorXd &y) {
+  void tmb_forward(SEXP f, const Eigen::VectorXd &x, Eigen::VectorXd &y)
+  {
     Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
 #ifdef CPPAD_FRAMEWORK
-    SEXP tag=R_ExternalPtrTag(f);
-    if(tag == Rf_install("ADFun")) {
-      ADFun<double>* pf;
-      pf = (ADFun<double>*) R_ExternalPtrAddr(f);
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag == Rf_install("ADFun"))
+    {
+      ADFun<double> *pf;
+      pf = (ADFun<double> *)R_ExternalPtrAddr(f);
       y_map = pf->Forward(0, x);
-    } else
-      if(tag == Rf_install("parallelADFun")) {
-        parallelADFun<double>* pf;
-        pf = (parallelADFun<double>*) R_ExternalPtrAddr(f);
-        y_map = pf->Forward(0, x);
-      } else
-        Rf_error("Unknown function pointer");
+    }
+    else if (tag == Rf_install("parallelADFun"))
+    {
+      parallelADFun<double> *pf;
+      pf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      y_map = pf->Forward(0, x);
+    }
+    else
+      Rf_error("Unknown function pointer");
 #endif
 #ifdef TMBAD_FRAMEWORK
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
-    SEXP tag=R_ExternalPtrTag(f);
-    if(tag == Rf_install("ADFun")) {
-      adfun* pf = (adfun*) R_ExternalPtrAddr(f);
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag == Rf_install("ADFun"))
+    {
+      adfun *pf = (adfun *)R_ExternalPtrAddr(f);
       y_map = pf->forward(x);
-    } else
-      if(tag == Rf_install("parallelADFun")) {
-        parallelADFun<double>* pf;
-        pf = (parallelADFun<double>*) R_ExternalPtrAddr(f);
-        y_map = pf->forward(x);
-      } else
-        Rf_error("Unknown function pointer");
+    }
+    else if (tag == Rf_install("parallelADFun"))
+    {
+      parallelADFun<double> *pf;
+      pf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      y_map = pf->forward(x);
+    }
+    else
+      Rf_error("Unknown function pointer");
 #endif
   }
-  void tmb_reverse(SEXP f, const Eigen::VectorXd &v, Eigen::VectorXd &y) {
+  void tmb_reverse(SEXP f, const Eigen::VectorXd &v, Eigen::VectorXd &y)
+  {
     Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
 #ifdef CPPAD_FRAMEWORK
-    SEXP tag=R_ExternalPtrTag(f);
-    if(tag == Rf_install("ADFun")) {
-      ADFun<double>* pf;
-      pf = (ADFun<double>*) R_ExternalPtrAddr(f);
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag == Rf_install("ADFun"))
+    {
+      ADFun<double> *pf;
+      pf = (ADFun<double> *)R_ExternalPtrAddr(f);
       y_map = pf->Reverse(1, v);
-    } else
-      if(tag == Rf_install("parallelADFun")) {
-        parallelADFun<double>* pf;
-        pf = (parallelADFun<double>*) R_ExternalPtrAddr(f);
-        y_map = pf->Reverse(1, v);
-      } else
-        Rf_error("Unknown function pointer");
+    }
+    else if (tag == Rf_install("parallelADFun"))
+    {
+      parallelADFun<double> *pf;
+      pf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      y_map = pf->Reverse(1, v);
+    }
+    else
+      Rf_error("Unknown function pointer");
 #endif
 #ifdef TMBAD_FRAMEWORK
     typedef TMBad::ad_aug ad;
     typedef TMBad::ADFun<ad> adfun;
-    SEXP tag=R_ExternalPtrTag(f);
-    if(tag == Rf_install("ADFun")) {
-      adfun* pf = (adfun*) R_ExternalPtrAddr(f);
+    SEXP tag = R_ExternalPtrTag(f);
+    if (tag == Rf_install("ADFun"))
+    {
+      adfun *pf = (adfun *)R_ExternalPtrAddr(f);
       y_map = pf->reverse(v);
-    } else
-      if(tag == Rf_install("parallelADFun")) {
-        parallelADFun<double>* pf;
-        pf = (parallelADFun<double>*) R_ExternalPtrAddr(f);
-        y_map = pf->reverse(v);
-      } else
-        Rf_error("Unknown function pointer");
+    }
+    else if (tag == Rf_install("parallelADFun"))
+    {
+      parallelADFun<double> *pf;
+      pf = (parallelADFun<double> *)R_ExternalPtrAddr(f);
+      y_map = pf->reverse(v);
+    }
+    else
+      Rf_error("Unknown function pointer");
 #endif
   }
 }
 
 #endif /* #ifndef WITH_LIBTMB */
 
-
-
-
-
 #ifdef WITH_LIBTMB
 
 template class objective_function<double>;
 #ifdef CPPAD_FRAMEWORK
-template class objective_function<AD<double> >;
-template class objective_function<AD<AD<double> > >;
-template class objective_function<AD<AD<AD<double> > > >;
+template class objective_function<AD<double>>;
+template class objective_function<AD<AD<double>>>;
+template class objective_function<AD<AD<AD<double>>>>;
 #endif
 #ifdef TMBAD_FRAMEWORK
 template class objective_function<TMBad::ad_aug>;
@@ -2754,58 +3286,58 @@ extern "C"
 /* Register native routines (see 'Writing R extensions'). Especially
    relevant to avoid symbol lookup overhead for those routines that
    are called many times e.g. EvalADFunObject. */
-extern "C"{
+extern "C"
+{
   /* Some string utilities */
 #define xstringify(s) stringify(s)
 #define stringify(s) #s
   /* May be used as part of custom calldef tables */
-#define TMB_CALLDEFS                                            \
-  {"MakeADFunObject",     (DL_FUNC) &MakeADFunObject,     4},   \
-  {"FreeADFunObject",     (DL_FUNC) &FreeADFunObject,     1},   \
-  {"InfoADFunObject",     (DL_FUNC) &InfoADFunObject,     1},   \
-  {"tmbad_print",         (DL_FUNC) &tmbad_print,         2},   \
-  {"EvalADFunObject",     (DL_FUNC) &EvalADFunObject,     3},   \
-  {"TransformADFunObject",(DL_FUNC) &TransformADFunObject,2},   \
-  {"MakeDoubleFunObject", (DL_FUNC) &MakeDoubleFunObject, 4},   \
-  {"EvalDoubleFunObject", (DL_FUNC) &EvalDoubleFunObject, 3},   \
-  {"getParameterOrder",   (DL_FUNC) &getParameterOrder,   4},   \
-  {"MakeADGradObject",    (DL_FUNC) &MakeADGradObject,    4},   \
-  {"MakeADHessObject2",   (DL_FUNC) &MakeADHessObject2,   4},   \
-  {"usingAtomics",        (DL_FUNC) &usingAtomics,        0},   \
-  {"getFramework",        (DL_FUNC) &getFramework,        0},   \
-  {"getSetGlobalPtr",     (DL_FUNC) &getSetGlobalPtr,     1},   \
-  {"TMBconfig",           (DL_FUNC) &TMBconfig,           2}
+#define TMB_CALLDEFS                                                 \
+  {"MakeADFunObject", (DL_FUNC) & MakeADFunObject, 4},               \
+      {"FreeADFunObject", (DL_FUNC) & FreeADFunObject, 1},           \
+      {"InfoADFunObject", (DL_FUNC) & InfoADFunObject, 1},           \
+      {"tmbad_print", (DL_FUNC) & tmbad_print, 2},                   \
+      {"EvalADFunObject", (DL_FUNC) & EvalADFunObject, 3},           \
+      {"TransformADFunObject", (DL_FUNC) & TransformADFunObject, 2}, \
+      {"MakeDoubleFunObject", (DL_FUNC) & MakeDoubleFunObject, 4},   \
+      {"EvalDoubleFunObject", (DL_FUNC) & EvalDoubleFunObject, 3},   \
+      {"getParameterOrder", (DL_FUNC) & getParameterOrder, 4},       \
+      {"MakeADGradObject", (DL_FUNC) & MakeADGradObject, 4},         \
+      {"MakeADHessObject2", (DL_FUNC) & MakeADHessObject2, 4},       \
+      {"usingAtomics", (DL_FUNC) & usingAtomics, 0},                 \
+      {"getFramework", (DL_FUNC) & getFramework, 0},                 \
+      {"getSetGlobalPtr", (DL_FUNC) & getSetGlobalPtr, 1},           \
+      {"TMBconfig", (DL_FUNC) & TMBconfig, 2}
   /* May be used as part of custom R_init function
      C-callable routines (PACKAGE is 'const char*') */
 #define TMB_CCALLABLES(PACKAGE)                                         \
-  R_RegisterCCallable(PACKAGE, "tmb_forward", (DL_FUNC) &tmb_forward);  \
-  R_RegisterCCallable(PACKAGE, "tmb_reverse", (DL_FUNC) &tmb_reverse);
+  R_RegisterCCallable(PACKAGE, "tmb_forward", (DL_FUNC) & tmb_forward); \
+  R_RegisterCCallable(PACKAGE, "tmb_reverse", (DL_FUNC) & tmb_reverse);
   /* Default (optional) calldef table. */
 #ifdef TMB_LIB_INIT
 #include <R_ext/Rdynload.h>
-static R_CallMethodDef CallEntries[] = {
-  TMB_CALLDEFS
-  ,
+  static R_CallMethodDef CallEntries[] = {
+      TMB_CALLDEFS,
   /* User's R_unload_lib function must also be registered (because we
      disable dynamic lookup - see below). The unload function is
      mainly useful while developing models in order to clean up
      external pointers without restarting R. Should not be used by TMB
      dependent packages. */
 #ifdef LIB_UNLOAD
-  {xstringify(LIB_UNLOAD), (DL_FUNC) &LIB_UNLOAD, 1},
+      {xstringify(LIB_UNLOAD), (DL_FUNC)&LIB_UNLOAD, 1},
 #endif
-  /* End of table */
-  {NULL, NULL, 0}
-};
-void TMB_LIB_INIT(DllInfo *dll){
-  R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-  R_useDynamicSymbols(dll, (Rboolean)FALSE);
-  // Example: TMB_LIB_INIT = R_init_mypkg
-  //                                ^
-  //                                +-------+
-  //                                        ^
-  TMB_CCALLABLES(&(xstringify(TMB_LIB_INIT)[7]));
-}
+      /* End of table */
+      {NULL, NULL, 0}};
+  void TMB_LIB_INIT(DllInfo *dll)
+  {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, (Rboolean)FALSE);
+    // Example: TMB_LIB_INIT = R_init_mypkg
+    //                                ^
+    //                                +-------+
+    //                                        ^
+    TMB_CCALLABLES(&(xstringify(TMB_LIB_INIT)[7]));
+  }
 #endif /* #ifdef TMB_LIB_INIT */
 #undef xstringify
 #undef stringify

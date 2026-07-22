@@ -95,6 +95,14 @@
 ##' Also note that \code{skip.delta.method} may be necessary when bias
 ##' correcting a large number of variables.
 ##'
+##' The C++ macros \code{SDREPORT_FIXED()}, \code{SDREPORT_RANDOM()} and
+##' \code{SDREPORT_DERIVED()} provide a small registration layer on top of
+##' \code{sdreport()}. Registered quantities can be extracted with
+##' \code{summary(rep, "uncertainty")}. Derived registrations also behave
+##' like \code{ADREPORT()}. The registered payload is also stored in
+##' \code{rep$uncertainty} in a C++-friendly form that can be read with the
+##' header helper \code{sdreport_access}.
+##'
 ##' @title General sdreport function.
 ##' @param obj Object returned by \code{MakeADFun}
 ##' @param par.fixed Optional. Parameter estimate (will be known to \code{obj} when an optimization has been carried out).
@@ -106,7 +114,8 @@
 ##' @param getReportCovariance Get full covariance matrix of ADREPORTed variables?
 ##' @param skip.delta.method Skip the delta method? (\code{FALSE} by default)
 ##' @return Object of class \code{sdreport}
-##' @seealso \code{\link{summary.sdreport}}, \code{\link{print.sdreport}}, \code{\link{as.list.sdreport}}
+##' @seealso \code{\link{summary.sdreport}}, \code{\link{print.sdreport}}, \code{\link{as.list.sdreport}},
+##' \code{\link{sdreport_uncertainty}}, \code{\link{sdreport_estimate_sd}}
 ##' @examples
 ##' \dontrun{
 ##' runExample("linreg_parallel", thisR = TRUE) ## Non-random effect example
@@ -117,296 +126,416 @@
 ##' summary(rep, "random")                      ## Only random effects
 ##' summary(rep, "fixed", p.value = TRUE)       ## Only non-random effects
 ##' summary(rep, "report")                      ## Only report
+##' summary(rep, "uncertainty")                 ## Only C++ registered quantities
+##'
+##' ## If the C++ template registered a scalar quantity using e.g.
+##' ## SDREPORT_DERIVED(total_mortality):
+##' sdreport_estimate_sd(rep, "total_mortality")
 ##'
 ##' ## Bias correction
 ##' rep <- sdreport(obj, bias.correct = TRUE)
 ##' summary(rep, "report") }                    ## Include bias correction
-sdreport <- function(obj,par.fixed=NULL,hessian.fixed=NULL,getJointPrecision=FALSE,bias.correct=FALSE,
-                     bias.correct.control=list(sd=FALSE, split=NULL, nsplit=NULL), ignore.parm.uncertainty = FALSE,
-                     getReportCovariance=TRUE, skip.delta.method=FALSE){
-  if(is.null(obj$env$ADGrad) & (!is.null(obj$env$random)))
-    stop("Cannot calculate sd's without type ADGrad available in object for random effect models.")
-  ## Make object to calculate ADREPORT vector
-  obj2 <- MakeADFun(obj$env$data,
-                    obj$env$parameters,
-                    type = "ADFun",
-                    ADreport = TRUE,
-                    DLL = obj$env$DLL,
-                    silent = obj$env$silent)
-  r <- obj$env$random
-  ## Get full parameter (par), Fixed effects parameter (par.fixed)
-  ## and fixed effect gradient (gradient.fixed)
-  if(is.null(par.fixed)){ ## Parameter estimate not specified - use best encountered parameter
-    par <- obj$env$last.par.best
-    if(!is.null(r))par.fixed <- par[-r] else par.fixed <- par
-    gradient.fixed <- obj$gr(par.fixed)
-  } else {
-    gradient.fixed <- obj$gr(par.fixed) ## <-- updates last.par
-    par <- obj$env$last.par
-  }
-  ## In case of empty parameter vector:
-  if(length(par.fixed)==0) ignore.parm.uncertainty <- TRUE
-  ## Get Hessian wrt. fixed effects (hessian.fixed) and check if positive definite (pdHess).
-  if(ignore.parm.uncertainty){
-      hessian.fixed <- NULL
-      pdHess <- TRUE
-      Vtheta <- matrix(0, length(par.fixed), length(par.fixed))
-  } else {
-      if(is.null(hessian.fixed)){
-          hessian.fixed <- optimHess(par.fixed,obj$fn,obj$gr) ## Marginal precision of theta.
-      }
-      pdHess <- !is.character(try(chol(hessian.fixed),silent=TRUE))
-      Vtheta <- try(solve(hessian.fixed),silent=TRUE)
-      if(is(Vtheta, "try-error")) Vtheta <- hessian.fixed * NaN
-  }
-  ## Get random effect block of the full joint Hessian (hessian.random) and its
-  ## Cholesky factor (L)
-  if(!is.null(r)){
-    hessian.random <- obj$env$spHess(par,random=TRUE)   ## Conditional prec. of u|theta
-    L <- obj$env$L.created.by.newton
-    if(!is.null(L)){ ## Re-use symbolic factorization if exists
-      updateCholesky(L,hessian.random)
-      hessian.random@factors <- list(SPdCholesky=L)
+##'
+##' @section Access from C++ consumers:
+##' The helper \code{sdreport_uncertainty(rep, name = NULL)} exposes the
+##' registered uncertainty payload. Downstream packages can also call the
+##' native symbol \code{tmb_sdreport_get_uncertainty} via
+##' \code{R_GetCCallable("TMB", "tmb_sdreport_get_uncertainty")}. This is
+##' intended for C++ integration layers (for example FIMS) that need
+##' estimate and standard error arrays after \code{sdreport()} has been
+##' constructed.
+##'
+##' For scalar quantities a dedicated accessor is available through
+##' \code{sdreport_estimate_sd(rep, name)} and the C-callable symbol
+##' \code{tmb_sdreport_get_scalar_estimate_sd}.
+##'
+##' A minimal C++ consumer pattern (e.g. in FIMS) is:
+##' \preformatted{
+##' #include <TMB.hpp>
+##'
+##' std::pair<double, double> get_scalar(SEXP rep, const char* name) {
+##'   return tmb_get_sdreport_scalar(rep, name);
+##' }
+##' }
+sdreport <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJointPrecision = FALSE, bias.correct = FALSE,
+                     bias.correct.control = list(sd = FALSE, split = NULL, nsplit = NULL), ignore.parm.uncertainty = FALSE,
+                     getReportCovariance = TRUE, skip.delta.method = FALSE) {
+    if (is.null(obj$env$ADGrad) & (!is.null(obj$env$random))) {
+        stop("Cannot calculate sd's without type ADGrad available in object for random effect models.")
     }
-  }
-  ## Get ADreport vector (phi)
-  phi <- try(obj2$fn(par), silent=TRUE)    ## NOTE_1: obj2 forward sweep now initialized !
-  if(is.character(phi) | length(phi)==0){
-      phi <- numeric(0)
-  }
-  ADGradForward0Initialized <- FALSE
-  ADGradForward0Initialize <- function() { ## NOTE_2: ADGrad forward sweep now initialized !
-      obj$env$f(par, order = 0, type = "ADGrad")
-      ADGradForward0Initialized <<- TRUE
-  }
-  doDeltaMethod <- function(chunk=NULL){
-      ## ======== Determine case
-      ## If no random effects use standard delta method
-      simpleCase <- is.null(r)
-      if(length(phi)==0){ ## Nothing to report
-          simpleCase <- TRUE
-      } else { ## Something to report - get derivatives
-          if(is.null(chunk)){ ## Do all at once
-              Dphi <- obj2$gr(par)
-          } else {
-              ## Do *chunk* only
-              ## Reduce to Dphi[chunk,] and phi[chunk]
-              w <- rep(0, length(phi))
-              phiDeriv <- function(i){
-                  w[i] <- 1
-                  obj2$env$f(par, order=1, rangeweight=w, doforward=0) ## See NOTE_1
-              }
-              Dphi <- t( sapply(chunk, phiDeriv) )
-              phi <- phi[chunk]
-          }
-          if(!is.null(r)){
-              Dphi.random <- Dphi[,r,drop=FALSE]
-              Dphi.fixed <- Dphi[,-r,drop=FALSE]
-              if(all(Dphi.random==0)){ ## Fall back to simple case
-                  simpleCase <- TRUE
-                  Dphi <- Dphi.fixed
-              }
-          }
-      }
-      ## ======== Do delta method
-      ## Get covariance (cov)
-      if(simpleCase){
-          if(length(phi)>0){
-              cov <- Dphi %*% Vtheta %*% t(Dphi)
-          } else cov <- matrix(,0,0)
-      } else {
-          tmp <- solve(hessian.random,t(Dphi.random))
-          tmp <- as.matrix(tmp)
-          term1 <- Dphi.random%*%tmp ## first term.
-          if(ignore.parm.uncertainty){
-              term2 <- 0
-          } else {
-              ## Use columns of tmp as direction for reverse mode sweep
-              f <- obj$env$f
-              w <- rep(0, length(par))
-              if(!ADGradForward0Initialized) ADGradForward0Initialize()
-              reverse.sweep <- function(i){
-                  w[r] <- tmp[,i]
-                  -f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
-              }
-              A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
-              term2 <- A %*% (Vtheta %*% t(A)) ## second term
-          }
-          cov <- term1 + term2
-      }
-      ##list(phi=phi, cov=cov)
-      cov
-  }
-  if (!skip.delta.method) {
-      if (getReportCovariance) { ## Get all
-          cov <- doDeltaMethod()
-          sd <- sqrt(diag(cov))
-      } else {
-          tmp <- lapply(seq_along(phi), doDeltaMethod)
-          sd <- sqrt(as.numeric(unlist(tmp)))
-          cov <- NA
-      }
-  } else {
-      sd <- rep(NA, length(phi))
-      cov <- NA
-  }
-  ## Output
-  ans <- list(value=phi,sd=sd,cov=cov,par.fixed=par.fixed,
-              cov.fixed=Vtheta,pdHess=pdHess,
-              gradient.fixed=gradient.fixed)
-  ## ======== Calculate bias corrected random effects estimates if requested
-  if(bias.correct && !is.null(r)) {
-      epsilon <- rep(0,length(phi))
-      names(epsilon) <- names(phi)
-      parameters <- obj$env$parameters
-      parameters$TMB_epsilon_ <- epsilon ## Appends to list without changing attributes
-      doEpsilonMethod <- function(chunk = NULL) {
-          if(!is.null(chunk)) { ## Only do *chunk*
-              mapfac <- rep(NA, length(phi))
-              mapfac[chunk] <- chunk
-              parameters$TMB_epsilon_ <- updateMap(parameters$TMB_epsilon_,
-                                                   factor(mapfac) )
-          }
-          obj3 <- MakeADFun(obj$env$data,
-                            parameters,
-                            random = obj$env$random,
-                            checkParameterOrder = FALSE,
-                            DLL = obj$env$DLL,
-                            silent = obj$env$silent)
-          ## Get good initial parameters
-          obj3$env$start <- c(par, epsilon)
-          obj3$env$random.start <- expression(start[random])
-          ## Test if Hessian pattern is un-changed
-          h <- obj$env$spHess(random=TRUE)
-          h3 <- obj3$env$spHess(random=TRUE)
-          pattern.unchanged <- identical(h@i,h3@i) & identical(h@p,h3@p)
-          ## If pattern un-changed we can re-use symbolic Cholesky:
-          if(pattern.unchanged){
-              if(!obj$env$silent)
-                  cat("Re-using symbolic Cholesky\n")
-              obj3$env$L.created.by.newton <- L
-          } else {
-              if( .Call("have_tmb_symbolic", PACKAGE = "TMB") )
-                  runSymbolicAnalysis(obj3)
-          }
-          if(!is.null(chunk)) epsilon <- epsilon[chunk]
-          par.full <- c(par.fixed, epsilon)
-          i <- (1:length(par.full)) > length(par.fixed) ## epsilon indices
-          grad <- obj3$gr(par.full)
-          Vestimate <-
-              if(bias.correct.control$sd) {
-                  ## requireNamespace("numDeriv")
-                  hess <- numDeriv::jacobian(obj3$gr, par.full)
-                  -hess[i,i] + hess[i,!i] %*% Vtheta %*% hess[!i,i]
-              } else
-                  matrix(NA)
-          estimate <- grad[i]
-          names(estimate) <- names(epsilon)
-          list(value=estimate, sd=sqrt(diag(Vestimate)), cov=Vestimate)
-      }
-      nsplit <- bias.correct.control$nsplit
-      if(is.null(nsplit)) {
-          split <- bias.correct.control$split
-      } else {
-          split <- split(seq_along(phi),
-                         cut(seq_along(phi), nsplit))
-      }
-      if( is.null( split ) ){ ## Get all
-          ans$unbiased <- doEpsilonMethod()
-      } else {
-          tmp <- lapply(split, doEpsilonMethod)
-          m <- if (bias.correct.control$sd)
-                   length(phi) else 1
-          ans$unbiased <- list(value = rep(NA, length(phi)),
-                               sd    = rep(NA, m),
-                               cov   = matrix(NA, m, m))
-          for(i in seq_along(split)) {
-              ans$unbiased$value[ split[[i]] ] <- tmp[[i]]$value
-              if (bias.correct.control$sd) {
-                  ans$unbiased$sd   [ split[[i]] ] <- tmp[[i]]$sd
-                  ans$unbiased$cov  [ split[[i]],
-                                      split[[i]] ] <- tmp[[i]]$cov
-              }
-          }
-      }
-  }
-  ## ======== bias correct but no random effects => nothing to do
-  if(bias.correct && is.null(r)) {
-      ans$unbiased <- list(value=ans$value, sd=ans$sd, cov=ans$cov)
-      warning("'bias.correct' does nothing without random effects")
-  }
-  ## ======== Find marginal variances of all random effects i.e. phi(u,theta)=u
-  if(!is.null(r)){
-    if(is(L,"dCHMsuper")){ ## Required by inverse subset algorithm
-      diag.term1 <- solveSubset(L=L, diag=TRUE)
-      if(ignore.parm.uncertainty){
-          diag.term2 <- 0
-      } else {
-          f <- obj$env$f
-          w <- rep(0, length(par))
-          if(!ADGradForward0Initialized) ADGradForward0Initialize()
-          reverse.sweep <- function(i){
-              w[i] <- 1
-              f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[r]
-          }
-          nonr <- setdiff(seq_along(par), r)
-          framework <- .Call("getFramework", PACKAGE=obj$env$DLL)
-          if (framework != "TMBad")
-              tmp <- sapply(nonr,reverse.sweep)
-          else {
-            ## TMBad case requires special attention because the
-            ## ADGrad object is 'lazy', i.e. it skips the theta
-            ## derivative from the ADGrad tape.
-            if (length(r) <= length(nonr)) {
-              tmp <- f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r) ## TMBad only !!!
-            } else {
-              ## Common case. Could use the same code as above, but that is VERY inefficient!
-              ADGrad <- obj$env$ADGrad ## Backup
-              obj$env$retape_adgrad(lazy = FALSE)
-              tmp <- t( f(par, order = 1, type = "ADGrad", keepx=r, keepy=nonr) ) ## TMBad only !!!
-              obj$env$ADGrad <- ADGrad ## Restore
-            }
-          }
-          if(!is.matrix(tmp)) ## Happens if length(r)==1
-              tmp <- matrix(tmp, ncol=length(nonr) )
-          A <- solve(hessian.random, tmp)
-          diag.term2 <- rowSums((A %*% Vtheta)*A)
-      }
-      ans$par.random <- par[r]
-      ans$diag.cov.random <- diag.term1 + diag.term2
-      if(getJointPrecision){ ## Get V(u,theta)^-1
-          if(length(par.fixed) == 0) {
-              ans$jointPrecision <- hessian.random
-          }
-          else if (!ignore.parm.uncertainty) {
-              G <- hessian.random %*% A
-              G <- as.matrix(G) ## Avoid Matrix::cbind2('dsCMatrix','dgeMatrix')
-              M1 <- cbind2(hessian.random,G)
-              M2 <- cbind2(t(G), as.matrix(t(A)%*%G)+hessian.fixed )
-              M <- rbind2(M1,M2)
-              M <- forceSymmetric(M,uplo="L")
-              dn <- c(names(par)[r],names(par[-r]))
-              dimnames(M) <- list(dn,dn)
-              p <- invPerm(c(r,(1:length(par))[-r]))
-              ans$jointPrecision <- M[p,p]
-          }
-          else {
-              warning("ignore.parm.uncertainty ==> No joint precision available")
-          }
-      }
+    ## Make object to calculate ADREPORT vector
+    obj2 <- MakeADFun(obj$env$data,
+        obj$env$parameters,
+        type = "ADFun",
+        ADreport = TRUE,
+        DLL = obj$env$DLL,
+        silent = obj$env$silent
+    )
+    r <- obj$env$random
+    ## Get full parameter (par), Fixed effects parameter (par.fixed)
+    ## and fixed effect gradient (gradient.fixed)
+    if (is.null(par.fixed)) { ## Parameter estimate not specified - use best encountered parameter
+        par <- obj$env$last.par.best
+        if (!is.null(r)) par.fixed <- par[-r] else par.fixed <- par
+        gradient.fixed <- obj$gr(par.fixed)
     } else {
-      warning("Could not report sd's of full randomeffect vector.")
+        gradient.fixed <- obj$gr(par.fixed) ## <-- updates last.par
+        par <- obj$env$last.par
     }
-  }
-  ## Copy a few selected members of the environment 'env'. In
-  ## particular we need the 'skeleton' objects that allow us to put
-  ## results back in same shape as original parameter list.
-  ans$env <- new.env(parent = emptyenv())
-  ans$env$parameters <- obj$env$parameters
-  ans$env$random <- obj$env$random
-  ans$env$ADreportDims <- obj2$env$ADreportDims
-  class(ans) <- "sdreport"
-  ans
+    ## In case of empty parameter vector:
+    if (length(par.fixed) == 0) ignore.parm.uncertainty <- TRUE
+    ## Get Hessian wrt. fixed effects (hessian.fixed) and check if positive definite (pdHess).
+    if (ignore.parm.uncertainty) {
+        hessian.fixed <- NULL
+        pdHess <- TRUE
+        Vtheta <- matrix(0, length(par.fixed), length(par.fixed))
+    } else {
+        if (is.null(hessian.fixed)) {
+            hessian.fixed <- optimHess(par.fixed, obj$fn, obj$gr) ## Marginal precision of theta.
+        }
+        pdHess <- !is.character(try(chol(hessian.fixed), silent = TRUE))
+        Vtheta <- try(solve(hessian.fixed), silent = TRUE)
+        if (is(Vtheta, "try-error")) Vtheta <- hessian.fixed * NaN
+    }
+    ## Get random effect block of the full joint Hessian (hessian.random) and its
+    ## Cholesky factor (L)
+    if (!is.null(r)) {
+        hessian.random <- obj$env$spHess(par, random = TRUE) ## Conditional prec. of u|theta
+        L <- obj$env$L.created.by.newton
+        if (!is.null(L)) { ## Re-use symbolic factorization if exists
+            updateCholesky(L, hessian.random)
+            hessian.random@factors <- list(SPdCholesky = L)
+        }
+    }
+    ## Get ADreport vector (phi)
+    phi <- try(obj2$fn(par), silent = TRUE) ## NOTE_1: obj2 forward sweep now initialized !
+    if (is.character(phi) | length(phi) == 0) {
+        phi <- numeric(0)
+    }
+    ADGradForward0Initialized <- FALSE
+    ADGradForward0Initialize <- function() { ## NOTE_2: ADGrad forward sweep now initialized !
+        obj$env$f(par, order = 0, type = "ADGrad")
+        ADGradForward0Initialized <<- TRUE
+    }
+    doDeltaMethod <- function(chunk = NULL) {
+        ## ======== Determine case
+        ## If no random effects use standard delta method
+        simpleCase <- is.null(r)
+        if (length(phi) == 0) { ## Nothing to report
+            simpleCase <- TRUE
+        } else { ## Something to report - get derivatives
+            if (is.null(chunk)) { ## Do all at once
+                Dphi <- obj2$gr(par)
+            } else {
+                ## Do *chunk* only
+                ## Reduce to Dphi[chunk,] and phi[chunk]
+                w <- rep(0, length(phi))
+                phiDeriv <- function(i) {
+                    w[i] <- 1
+                    obj2$env$f(par, order = 1, rangeweight = w, doforward = 0) ## See NOTE_1
+                }
+                Dphi <- t(sapply(chunk, phiDeriv))
+                phi <- phi[chunk]
+            }
+            if (!is.null(r)) {
+                Dphi.random <- Dphi[, r, drop = FALSE]
+                Dphi.fixed <- Dphi[, -r, drop = FALSE]
+                if (all(Dphi.random == 0)) { ## Fall back to simple case
+                    simpleCase <- TRUE
+                    Dphi <- Dphi.fixed
+                }
+            }
+        }
+        ## ======== Do delta method
+        ## Get covariance (cov)
+        if (simpleCase) {
+            if (length(phi) > 0) {
+                cov <- Dphi %*% Vtheta %*% t(Dphi)
+            } else {
+                cov <- matrix(, 0, 0)
+            }
+        } else {
+            tmp <- solve(hessian.random, t(Dphi.random))
+            tmp <- as.matrix(tmp)
+            term1 <- Dphi.random %*% tmp ## first term.
+            if (ignore.parm.uncertainty) {
+                term2 <- 0
+            } else {
+                ## Use columns of tmp as direction for reverse mode sweep
+                f <- obj$env$f
+                w <- rep(0, length(par))
+                if (!ADGradForward0Initialized) ADGradForward0Initialize()
+                reverse.sweep <- function(i) {
+                    w[r] <- tmp[, i]
+                    -f(par, order = 1, type = "ADGrad", rangeweight = w, doforward = 0)[-r]
+                }
+                A <- t(do.call("cbind", lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
+                term2 <- A %*% (Vtheta %*% t(A)) ## second term
+            }
+            cov <- term1 + term2
+        }
+        ## list(phi=phi, cov=cov)
+        cov
+    }
+    if (!skip.delta.method) {
+        if (getReportCovariance) { ## Get all
+            cov <- doDeltaMethod()
+            sd <- sqrt(diag(cov))
+        } else {
+            tmp <- lapply(seq_along(phi), doDeltaMethod)
+            sd <- sqrt(as.numeric(unlist(tmp)))
+            cov <- NA
+        }
+    } else {
+        sd <- rep(NA, length(phi))
+        cov <- NA
+    }
+    ## Output
+    ans <- list(
+        value = phi, sd = sd, cov = cov, par.fixed = par.fixed,
+        cov.fixed = Vtheta, pdHess = pdHess,
+        gradient.fixed = gradient.fixed
+    )
+    ## ======== Calculate bias corrected random effects estimates if requested
+    if (bias.correct && !is.null(r)) {
+        epsilon <- rep(0, length(phi))
+        names(epsilon) <- names(phi)
+        parameters <- obj$env$parameters
+        parameters$TMB_epsilon_ <- epsilon ## Appends to list without changing attributes
+        doEpsilonMethod <- function(chunk = NULL) {
+            if (!is.null(chunk)) { ## Only do *chunk*
+                mapfac <- rep(NA, length(phi))
+                mapfac[chunk] <- chunk
+                parameters$TMB_epsilon_ <- updateMap(
+                    parameters$TMB_epsilon_,
+                    factor(mapfac)
+                )
+            }
+            obj3 <- MakeADFun(obj$env$data,
+                parameters,
+                random = obj$env$random,
+                checkParameterOrder = FALSE,
+                DLL = obj$env$DLL,
+                silent = obj$env$silent
+            )
+            ## Get good initial parameters
+            obj3$env$start <- c(par, epsilon)
+            obj3$env$random.start <- expression(start[random])
+            ## Test if Hessian pattern is un-changed
+            h <- obj$env$spHess(random = TRUE)
+            h3 <- obj3$env$spHess(random = TRUE)
+            pattern.unchanged <- identical(h@i, h3@i) & identical(h@p, h3@p)
+            ## If pattern un-changed we can re-use symbolic Cholesky:
+            if (pattern.unchanged) {
+                if (!obj$env$silent) {
+                    cat("Re-using symbolic Cholesky\n")
+                }
+                obj3$env$L.created.by.newton <- L
+            } else {
+                if (.Call("have_tmb_symbolic", PACKAGE = "TMB")) {
+                    runSymbolicAnalysis(obj3)
+                }
+            }
+            if (!is.null(chunk)) epsilon <- epsilon[chunk]
+            par.full <- c(par.fixed, epsilon)
+            i <- (1:length(par.full)) > length(par.fixed) ## epsilon indices
+            grad <- obj3$gr(par.full)
+            Vestimate <-
+                if (bias.correct.control$sd) {
+                    ## requireNamespace("numDeriv")
+                    hess <- numDeriv::jacobian(obj3$gr, par.full)
+                    -hess[i, i] + hess[i, !i] %*% Vtheta %*% hess[!i, i]
+                } else {
+                    matrix(NA)
+                }
+            estimate <- grad[i]
+            names(estimate) <- names(epsilon)
+            list(value = estimate, sd = sqrt(diag(Vestimate)), cov = Vestimate)
+        }
+        nsplit <- bias.correct.control$nsplit
+        if (is.null(nsplit)) {
+            split <- bias.correct.control$split
+        } else {
+            split <- split(
+                seq_along(phi),
+                cut(seq_along(phi), nsplit)
+            )
+        }
+        if (is.null(split)) { ## Get all
+            ans$unbiased <- doEpsilonMethod()
+        } else {
+            tmp <- lapply(split, doEpsilonMethod)
+            m <- if (bias.correct.control$sd) {
+                length(phi)
+            } else {
+                1
+            }
+            ans$unbiased <- list(
+                value = rep(NA, length(phi)),
+                sd = rep(NA, m),
+                cov = matrix(NA, m, m)
+            )
+            for (i in seq_along(split)) {
+                ans$unbiased$value[split[[i]]] <- tmp[[i]]$value
+                if (bias.correct.control$sd) {
+                    ans$unbiased$sd[split[[i]]] <- tmp[[i]]$sd
+                    ans$unbiased$cov[
+                        split[[i]],
+                        split[[i]]
+                    ] <- tmp[[i]]$cov
+                }
+            }
+        }
+    }
+    ## ======== bias correct but no random effects => nothing to do
+    if (bias.correct && is.null(r)) {
+        ans$unbiased <- list(value = ans$value, sd = ans$sd, cov = ans$cov)
+        warning("'bias.correct' does nothing without random effects")
+    }
+    ## ======== Find marginal variances of all random effects i.e. phi(u,theta)=u
+    if (!is.null(r)) {
+        if (is(L, "dCHMsuper")) { ## Required by inverse subset algorithm
+            diag.term1 <- solveSubset(L = L, diag = TRUE)
+            if (ignore.parm.uncertainty) {
+                diag.term2 <- 0
+            } else {
+                f <- obj$env$f
+                w <- rep(0, length(par))
+                if (!ADGradForward0Initialized) ADGradForward0Initialize()
+                reverse.sweep <- function(i) {
+                    w[i] <- 1
+                    f(par, order = 1, type = "ADGrad", rangeweight = w, doforward = 0)[r]
+                }
+                nonr <- setdiff(seq_along(par), r)
+                framework <- .Call("getFramework", PACKAGE = obj$env$DLL)
+                if (framework != "TMBad") {
+                    tmp <- sapply(nonr, reverse.sweep)
+                } else {
+                    ## TMBad case requires special attention because the
+                    ## ADGrad object is 'lazy', i.e. it skips the theta
+                    ## derivative from the ADGrad tape.
+                    if (length(r) <= length(nonr)) {
+                        tmp <- f(par, order = 1, type = "ADGrad", keepx = nonr, keepy = r) ## TMBad only !!!
+                    } else {
+                        ## Common case. Could use the same code as above, but that is VERY inefficient!
+                        ADGrad <- obj$env$ADGrad ## Backup
+                        obj$env$retape_adgrad(lazy = FALSE)
+                        tmp <- t(f(par, order = 1, type = "ADGrad", keepx = r, keepy = nonr)) ## TMBad only !!!
+                        obj$env$ADGrad <- ADGrad ## Restore
+                    }
+                }
+                if (!is.matrix(tmp)) { ## Happens if length(r)==1
+                    tmp <- matrix(tmp, ncol = length(nonr))
+                }
+                A <- solve(hessian.random, tmp)
+                diag.term2 <- rowSums((A %*% Vtheta) * A)
+            }
+            ans$par.random <- par[r]
+            ans$diag.cov.random <- diag.term1 + diag.term2
+            if (getJointPrecision) { ## Get V(u,theta)^-1
+                if (length(par.fixed) == 0) {
+                    ans$jointPrecision <- hessian.random
+                } else if (!ignore.parm.uncertainty) {
+                    G <- hessian.random %*% A
+                    G <- as.matrix(G) ## Avoid Matrix::cbind2('dsCMatrix','dgeMatrix')
+                    M1 <- cbind2(hessian.random, G)
+                    M2 <- cbind2(t(G), as.matrix(t(A) %*% G) + hessian.fixed)
+                    M <- rbind2(M1, M2)
+                    M <- forceSymmetric(M, uplo = "L")
+                    dn <- c(names(par)[r], names(par[-r]))
+                    dimnames(M) <- list(dn, dn)
+                    p <- invPerm(c(r, (1:length(par))[-r]))
+                    ans$jointPrecision <- M[p, p]
+                } else {
+                    warning("ignore.parm.uncertainty ==> No joint precision available")
+                }
+            }
+        } else {
+            warning("Could not report sd's of full randomeffect vector.")
+        }
+    }
+    ## Copy a few selected members of the environment 'env'. In
+    ## particular we need the 'skeleton' objects that allow us to put
+    ## results back in same shape as original parameter list.
+    ans$env <- new.env(parent = emptyenv())
+    ans$env$parameters <- obj$env$parameters
+    ans$env$random <- obj$env$random
+    ans$env$ADreportDims <- obj2$env$ADreportDims
+    ans$env$uncertaintyInfo <- obj$env$uncertaintyInfo
+    ans$uncertainty <- uncertainty_list.sdreport(ans)
+    class(ans) <- "sdreport"
+    ans
+}
+
+uncertainty_list.sdreport <- function(object) {
+    info <- object$env$uncertaintyInfo
+    if (is.null(info) || length(info$names) == 0) {
+        return(NULL)
+    }
+    if (anyDuplicated(info$names)) {
+        stop("Registered SDREPORT names must be unique to support C++ lookup.")
+    }
+    estimate.par <- as.list.sdreport(object, "Estimate")
+    se.par <- as.list.sdreport(object, "Std. Error")
+    have.derived <- any(info$types == "derived")
+    estimate.rep <- se.rep <- NULL
+    if (have.derived && length(object$value) > 0) {
+        estimate.rep <- as.list.sdreport(object, "Estimate", report = TRUE)
+        se.rep <- as.list.sdreport(object, "Std. Error", report = TRUE)
+    }
+    out <- vector("list", length(info$names))
+    names(out) <- info$names
+    for (i in seq_along(info$names)) {
+        kind <- info$types[[i]]
+        name <- info$names[[i]]
+        dims <- as.integer(info$dims[[i]])
+        if (kind == "derived") {
+            report.index <- info$reportIndex[[i]]
+            if (is.null(estimate.rep) || report.index < 1 || report.index > length(estimate.rep)) {
+                stop("Unable to resolve derived SDREPORT registration '", name, "'.")
+            }
+            estimate <- estimate.rep[[report.index]]
+            std.error <- se.rep[[report.index]]
+        } else {
+            if (!name %in% names(estimate.par)) {
+                stop("Unable to resolve parameter SDREPORT registration '", name, "'.")
+            }
+            estimate <- estimate.par[[name]]
+            std.error <- se.par[[name]]
+        }
+        estimate <- array(as.vector(estimate), dim = dims)
+        std.error <- array(as.vector(std.error), dim = dims)
+        out[[i]] <- list(
+            name = name,
+            type = kind,
+            estimate = estimate,
+            sd = std.error,
+            dim = dims
+        )
+    }
+    out
+}
+
+uncertainty.sdreport <- function(object) {
+    if (is.null(object$uncertainty) || length(object$uncertainty) == 0) {
+        return(NULL)
+    }
+    rows <- vector("list", length(object$uncertainty))
+    rownames.out <- vector("character", 0)
+    for (i in seq_along(object$uncertainty)) {
+        value <- object$uncertainty[[i]]
+        if (is.null(value)) next
+        rows[[i]] <- cbind(as.vector(value$estimate), as.vector(value$sd))
+        rownames.out <- c(rownames.out, rep(value$name, length(as.vector(value$estimate))))
+    }
+    rows <- Filter(Negate(is.null), rows)
+    if (length(rows) == 0) {
+        return(NULL)
+    }
+    ans <- do.call(rbind, rows)
+    rownames(ans) <- rownames.out
+    colnames(ans) <- c("Estimate", "Std. Error")
+    ans
 }
 
 ##' Extract parameters, random effects and reported variables along
@@ -417,40 +546,49 @@ sdreport <- function(obj,par.fixed=NULL,hessian.fixed=NULL,getJointPrecision=FAL
 ##' @param object Output from \code{\link{sdreport}}
 ##' @param select Parameter classes to select. Can be any subset of
 ##' \code{"fixed"} (\eqn{\hat\theta}), \code{"random"} (\eqn{\hat u}) or
-##' \code{"report"} (\eqn{\phi(\hat u,\hat\theta)}) using notation as
+##' \code{"report"} (\eqn{\phi(\hat u,\hat\theta)}) or
+##' \code{"uncertainty"} (registered with \code{SDREPORT_*()} in C++) using notation as
 ##' \code{\link{sdreport}}.
 ##' @param p.value Add column with approximate p-values
 ##' @param ... Not used
 ##' @return matrix
 ##' @method summary sdreport
 ##' @S3method summary sdreport
-summary.sdreport <- function(object, select = c("all", "fixed", "random", "report"),
-                             p.value=FALSE, ...)
-{
-  select <- match.arg(select, several.ok = TRUE)# *several* : e.g. c("fixed", "report")
-  ## check if 'meth' (or "all") is among the 'select'ed ones :
-  s.has <- function(meth) any(match(c(meth, "all"), select, nomatch=0L)) > 0L
-  ans1 <- ans2 <- ans3 <- NULL
-  if(s.has("fixed"))  ans1 <- cbind(object$par.fixed,  sqrt(diag(object$cov.fixed)))
-  if(s.has("random")) ans2 <- cbind(object$par.random, sqrt(as.numeric(object$diag.cov.random)))
-  if(s.has("report")) ans3 <- cbind(object$value,      object$sd)
-  ans <- rbind(ans1, ans2, ans3)
-  if(s.has("report")) {
-      ans4 <- cbind("Est. (bias.correct)" = object$unbiased$value,
-                    "Std. (bias.correct)" = object$unbiased$sd)
-      if(!is.null(ans4))
-          ans <- cbind(ans, rbind(NA * ans1, NA * ans2, ans4))
-  }
-  if(length(ans) && ncol(ans) > 0) {
-    colnames(ans)[1:2] <- c("Estimate", "Std. Error")
-    if(p.value) {
-      ans <- cbind(ans, "z value"    = (z <- ans[,"Estimate"] / ans[,"Std. Error"]))
-      ans <- cbind(ans, "Pr(>|z^2|)" = pchisq(z^2, df=1, lower.tail=FALSE))
+summary.sdreport <- function(object, select = c("all", "fixed", "random", "report", "uncertainty"),
+                             p.value = FALSE, ...) {
+    select <- match.arg(select, several.ok = TRUE) # *several* : e.g. c("fixed", "report")
+    ## check if 'meth' (or "all") is among the 'select'ed ones :
+    s.has <- function(meth) any(match(c(meth, "all"), select, nomatch = 0L)) > 0L
+    ans1 <- ans2 <- ans3 <- ans4 <- NULL
+    if (s.has("fixed")) ans1 <- cbind(object$par.fixed, sqrt(diag(object$cov.fixed)))
+    if (s.has("random")) ans2 <- cbind(object$par.random, sqrt(as.numeric(object$diag.cov.random)))
+    if (s.has("report")) ans3 <- cbind(object$value, object$sd)
+    if (s.has("uncertainty")) ans4 <- uncertainty.sdreport(object)
+    ans <- rbind(ans1, ans2, ans3, ans4)
+    if (s.has("report")) {
+        ans.bias <- cbind(
+            "Est. (bias.correct)" = object$unbiased$value,
+            "Std. (bias.correct)" = object$unbiased$sd
+        )
+        if (!is.null(ans.bias)) {
+            padding <- rbind(NA * ans1, NA * ans2, ans.bias)
+            if (!is.null(ans4)) padding <- rbind(padding, NA * ans4)
+            ans <- cbind(ans, padding)
+        }
     }
-  } else
-      warning("no or empty summary selected via 'select = %s'",
-              deparse(select))
-  ans
+    if (length(ans) && ncol(ans) > 0) {
+        colnames(ans)[1:2] <- c("Estimate", "Std. Error")
+        if (p.value) {
+            ans <- cbind(ans, "z value" = (z <- ans[, "Estimate"] / ans[, "Std. Error"]))
+            ans <- cbind(ans, "Pr(>|z^2|)" = pchisq(z^2, df = 1, lower.tail = FALSE))
+        }
+    } else {
+        warning(
+            "no or empty summary selected via 'select = %s'",
+            deparse(select)
+        )
+    }
+    ans
 }
 
 ##' Print parameter estimates and give convergence diagnostic based on
@@ -462,15 +600,14 @@ summary.sdreport <- function(object, select = c("all", "fixed", "random", "repor
 ##' @return NULL
 ##' @method print sdreport
 ##' @S3method print sdreport
-print.sdreport <- function(x, ...)
-{
-  cat("sdreport(.) result\n")
-  print(summary(x, "fixed"))
-  if(!x$pdHess) {
-    cat("Warning:\nHessian of fixed effects was not positive definite.\n")
-  }
-  cat("Maximum gradient component:", max(abs(x$gradient.fixed)),"\n")
-  invisible(x)
+print.sdreport <- function(x, ...) {
+    cat("sdreport(.) result\n")
+    print(summary(x, "fixed"))
+    if (!x$pdHess) {
+        cat("Warning:\nHessian of fixed effects was not positive definite.\n")
+    }
+    cat("Maximum gradient component:", max(abs(x$gradient.fixed)), "\n")
+    invisible(x)
 }
 
 ##' Get estimated parameters or standard errors in the same shape as
@@ -510,55 +647,63 @@ print.sdreport <- function(x, ...)
 ##' ## Bias corrected AD reported variables as a list:
 ##' as.list(rep, "Est. (bias.correct)", report=TRUE)
 ##' }
-as.list.sdreport <- function(x, what = "", report=FALSE, ...) {
-    if (what == "") return (x)
+as.list.sdreport <- function(x, what = "", report = FALSE, ...) {
+    if (what == "") {
+        return(x)
+    }
     if (!report) {
         ans <- x$env$parameters
         random <- x$env$random
         par <- numeric(length(x$par.fixed) +
-                       length(x$par.random))
+            length(x$par.random))
         fixed <- rep(TRUE, length(par))
-        if(length(random)>0)
+        if (length(random) > 0) {
             fixed[random] <- FALSE
+        }
         ## Possible choices
-        opts <- colnames( summary(x, select = c("fixed", "random"), ...) )
+        opts <- colnames(summary(x, select = c("fixed", "random"), ...))
         what <- match.arg(what, opts)
-        if( any( fixed ) )
-            par[ fixed ] <- summary(x, select = "fixed",  ...)[ , what]
-        if( any(!fixed ) )
-            par[!fixed ] <- summary(x, select = "random", ...)[ , what]
+        if (any(fixed)) {
+            par[fixed] <- summary(x, select = "fixed", ...)[, what]
+        }
+        if (any(!fixed)) {
+            par[!fixed] <- summary(x, select = "random", ...)[, what]
+        }
         ## Workaround utils::relist bug (?) for empty list items
-        nonemp <- sapply(ans, function(x)length(x) > 0)
+        nonemp <- sapply(ans, function(x) length(x) > 0)
         nonempindex <- which(nonemp)
         skeleton <- as.relistable(ans[nonemp])
         li <- relist(par, skeleton)
-        reshape <- function(x){
-            if(is.null(attr(x,"map")))
+        reshape <- function(x) {
+            if (is.null(attr(x, "map"))) {
                 return(x)
-            y <- attr(x,"shape")
+            }
+            y <- attr(x, "shape")
             ## Handle special case where parameters are mapped to a fixed
             ## value
             if (what != "Estimate") {
                 y[] <- NA
             }
-            f <- attr(x,"map")
+            f <- attr(x, "map")
             i <- which(f >= 0)
             y[i] <- x[f[i] + 1L]
             y
         }
-        for(i in seq(skeleton)){
+        for (i in seq(skeleton)) {
             ans[[nonempindex[i]]][] <- as.vector(li[[i]])
         }
-        for(i in seq(ans)){
+        for (i in seq(ans)) {
             ans[[i]] <- reshape(ans[[i]])
         }
     } else { ## Reported variables
         ## Possible choices
-        opts <- colnames( summary(x, select = "report", ...) )
+        opts <- colnames(summary(x, select = "report", ...))
         what <- match.arg(what, opts)
-        par <- summary(x, select = "report",  ...)[ , what]
-        skeleton <- lapply(x$env$ADreportDims,
-                           function(dim) array(NA, dim))
+        par <- summary(x, select = "report", ...)[, what]
+        skeleton <- lapply(
+            x$env$ADreportDims,
+            function(dim) array(NA, dim)
+        )
         skeleton <- as.relistable(skeleton)
         ans <- relist(par, skeleton) ## Not keeping array dims !
         ans <- Map(array, ans, x$env$ADreportDims)
@@ -567,4 +712,69 @@ as.list.sdreport <- function(x, what = "", report=FALSE, ...) {
     attr(ans, "check.passed") <- NULL
     attr(ans, "what") <- what
     ans
+}
+
+##' Extract C++-registered uncertainty payload
+##'
+##' Convenience wrapper around a native accessor intended for downstream
+##' C++ integrations. The underlying C-callable symbol is
+##' \code{tmb_sdreport_get_uncertainty}.
+##'
+##' @param x Output from \code{\link{sdreport}}.
+##' @param name Optional registered name. If omitted, all entries are returned.
+##' @return A named list of uncertainty entries, or a single entry when \code{name} is set.
+##' @examples
+##' \dontrun{
+##' runExample("simple", thisR = TRUE)
+##' rep <- sdreport(obj)
+##'
+##' ## Get all registered uncertainty entries
+##' all_entries <- sdreport_uncertainty(rep)
+##'
+##' ## Get one registered entry by name
+##' one_entry <- sdreport_uncertainty(rep, "total_mortality")
+##' }
+##' @export
+sdreport_uncertainty <- function(x, name = NULL) {
+    if (!inherits(x, "sdreport")) {
+        stop("'x' must inherit from class 'sdreport'.")
+    }
+    if (is.null(name)) {
+        return(.Call("tmb_sdreport_get_uncertainty", x, NULL, PACKAGE = "TMB"))
+    }
+    name <- as.character(name)
+    if (length(name) != 1L || is.na(name) || name == "") {
+        stop("'name' must be a single non-empty string.")
+    }
+    .Call("tmb_sdreport_get_uncertainty", x, name, PACKAGE = "TMB")
+}
+
+##' Extract scalar estimate and standard error by registered name
+##'
+##' Lightweight helper intended for downstream C++ bridges that only need
+##' scalar values. The underlying C-callable symbol is
+##' \code{tmb_sdreport_get_scalar_estimate_sd}.
+##'
+##' @param x Output from \code{\link{sdreport}}.
+##' @param name Registered uncertainty name.
+##' @return Named numeric vector with entries \code{estimate} and \code{sd}.
+##' @examples
+##' \dontrun{
+##' runExample("simple", thisR = TRUE)
+##' rep <- sdreport(obj)
+##'
+##' ## Requires that the C++ template registered a scalar quantity,
+##' ## e.g. SDREPORT_DERIVED(total_mortality)
+##' sdreport_estimate_sd(rep, "total_mortality")
+##' }
+##' @export
+sdreport_estimate_sd <- function(x, name) {
+    if (!inherits(x, "sdreport")) {
+        stop("'x' must inherit from class 'sdreport'.")
+    }
+    name <- as.character(name)
+    if (length(name) != 1L || is.na(name) || name == "") {
+        stop("'name' must be a single non-empty string.")
+    }
+    .Call("tmb_sdreport_get_scalar_estimate_sd", x, name, PACKAGE = "TMB")
 }
