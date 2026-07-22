@@ -130,6 +130,10 @@ test-tmb_examples:
 	$(R) --version
 	cd tmb_examples; make test
 
+test-sdreport-native:
+	$(R) --version
+	examples=linreg,linreg_parallel Rscript tmb_examples/tools/check_sdreport_native.R
+
 doxygen:
 	cd dox; make all
 

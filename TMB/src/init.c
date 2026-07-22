@@ -29,6 +29,7 @@ SEXP tmb_ldl_update(SEXP X, SEXP Y);
 SEXP tmb_ldl_deriv(SEXP L);
 SEXP tmb_sdreport_get_uncertainty(SEXP rep, SEXP name);
 SEXP tmb_sdreport_get_scalar_estimate_sd(SEXP rep, SEXP name);
+SEXP tmb_sdreport_delta_fixed(SEXP phi, SEXP jac, SEXP Vtheta);
 
 static R_CallMethodDef CallEntries[] = {
     CALLDEF(omp_num_threads, 1),
@@ -53,6 +54,7 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(tmb_ldl_deriv, 1),
     CALLDEF(tmb_sdreport_get_uncertainty, 2),
     CALLDEF(tmb_sdreport_get_scalar_estimate_sd, 2),
+    CALLDEF(tmb_sdreport_delta_fixed, 3),
     {NULL, NULL, 0}
 };
 

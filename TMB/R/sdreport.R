@@ -778,3 +778,191 @@ sdreport_estimate_sd <- function(x, name) {
     }
     .Call("tmb_sdreport_get_scalar_estimate_sd", x, name, PACKAGE = "TMB")
 }
+
+##' Native sdreport extension
+##'
+##' Drop-in extension of \code{sdreport()} that uses a native C++
+##' delta-method kernel when possible, and falls back to \code{sdreport()}
+##' for unsupported configurations.
+##'
+##' @inheritParams sdreport
+##' @param strict If \code{TRUE}, unsupported configurations raise an error
+##' instead of falling back to \code{sdreport()}.
+##' @return Object of class \code{sdreport}
+##' @export
+sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJointPrecision = FALSE, bias.correct = FALSE,
+                            bias.correct.control = list(sd = FALSE, split = NULL, nsplit = NULL), ignore.parm.uncertainty = FALSE,
+                            getReportCovariance = TRUE, skip.delta.method = FALSE, strict = FALSE) {
+    call_native <- function(symbol, ..., package = "TMB") {
+        if (is.loaded(symbol, PACKAGE = package)) {
+            return(.Call(symbol, ..., PACKAGE = package))
+        }
+        if (is.loaded(symbol)) {
+            return(.Call(symbol, ...))
+        }
+        stop("Native symbol '", symbol, "' is not loaded.")
+    }
+
+    unsupported <- !is.null(obj$env$random) || bias.correct || getJointPrecision
+    if (unsupported) {
+        if (strict) {
+            stop("'sdreport_native' currently supports non-random models without bias correction or joint precision.")
+        }
+        return(sdreport(obj,
+            par.fixed = par.fixed, hessian.fixed = hessian.fixed,
+            getJointPrecision = getJointPrecision, bias.correct = bias.correct,
+            bias.correct.control = bias.correct.control,
+            ignore.parm.uncertainty = ignore.parm.uncertainty,
+            getReportCovariance = getReportCovariance,
+            skip.delta.method = skip.delta.method
+        ))
+    }
+
+    obj2 <- MakeADFun(obj$env$data,
+        obj$env$parameters,
+        type = "ADFun",
+        ADreport = TRUE,
+        DLL = obj$env$DLL,
+        silent = obj$env$silent
+    )
+
+    if (is.null(par.fixed)) {
+        par.fixed <- obj$env$last.par.best
+    }
+    gradient.fixed <- obj$gr(par.fixed)
+    par <- obj$env$last.par
+
+    if (length(par.fixed) == 0) ignore.parm.uncertainty <- TRUE
+    if (ignore.parm.uncertainty) {
+        hessian.fixed <- NULL
+        pdHess <- TRUE
+        Vtheta <- matrix(0, length(par.fixed), length(par.fixed))
+    } else {
+        if (is.null(hessian.fixed)) {
+            hessian.fixed <- optimHess(par.fixed, obj$fn, obj$gr)
+        }
+        pdHess <- !is.character(try(chol(hessian.fixed), silent = TRUE))
+        Vtheta <- try(solve(hessian.fixed), silent = TRUE)
+        if (is(Vtheta, "try-error")) Vtheta <- hessian.fixed * NaN
+    }
+
+    phi <- try(obj2$fn(par), silent = TRUE)
+    if (is.character(phi) || length(phi) == 0) {
+        phi <- numeric(0)
+    }
+    jac <- if (length(phi) > 0) obj2$gr(par) else matrix(0, 0, length(par.fixed))
+    native <- call_native("tmb_sdreport_delta_fixed", as.double(phi), as.matrix(jac), as.matrix(Vtheta))
+    if (skip.delta.method) {
+        native$sd <- rep(NA_real_, length(native$value))
+        native$cov <- NA
+    } else if (!getReportCovariance) {
+        native$cov <- NA
+    }
+
+    ans <- list(
+        value = native$value,
+        sd = native$sd,
+        cov = native$cov,
+        par.fixed = par.fixed,
+        cov.fixed = Vtheta,
+        pdHess = pdHess,
+        gradient.fixed = gradient.fixed
+    )
+    ans$env <- new.env(parent = emptyenv())
+    ans$env$parameters <- obj$env$parameters
+    ans$env$random <- obj$env$random
+    ans$env$ADreportDims <- obj2$env$ADreportDims
+    ans$env$uncertaintyInfo <- obj$env$uncertaintyInfo
+    ans$uncertainty <- uncertainty_list.sdreport(ans)
+    class(ans) <- "sdreport"
+    ans
+}
+
+##' Compare sdreport native and reference paths
+##'
+##' Utility to compare \code{sdreport_native()} against canonical
+##' \code{sdreport()} on supported configurations.
+##'
+##' @param obj Object returned by \code{\link{MakeADFun}}.
+##' @param par.fixed Optional parameter estimate.
+##' @param hessian.fixed Optional Hessian wrt parameters.
+##' @param ignore.parm.uncertainty Ignore estimation variance of parameters?
+##' @param getReportCovariance Get full covariance matrix of reported variables?
+##' @param skip.delta.method Skip the delta method?
+##' @param compare.cov Compare covariance matrices as well?
+##' @param tolerance Numerical tolerance for pass/fail.
+##' @param keep.objects Include full reference/native objects in output?
+##' @return List with max absolute differences and pass/fail flags.
+##' @examples
+##' \dontrun{
+##' runExample("linreg_parallel", thisR = TRUE)
+##' compare_sdreport_native(obj)
+##' }
+##' @export
+compare_sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL,
+                                    ignore.parm.uncertainty = FALSE,
+                                    getReportCovariance = TRUE,
+                                    skip.delta.method = FALSE,
+                                    compare.cov = FALSE,
+                                    tolerance = sqrt(.Machine$double.eps),
+                                    keep.objects = FALSE) {
+    ref <- sdreport(obj,
+        par.fixed = par.fixed,
+        hessian.fixed = hessian.fixed,
+        getJointPrecision = FALSE,
+        bias.correct = FALSE,
+        ignore.parm.uncertainty = ignore.parm.uncertainty,
+        getReportCovariance = getReportCovariance,
+        skip.delta.method = skip.delta.method
+    )
+    nat <- sdreport_native(obj,
+        par.fixed = par.fixed,
+        hessian.fixed = hessian.fixed,
+        getJointPrecision = FALSE,
+        bias.correct = FALSE,
+        ignore.parm.uncertainty = ignore.parm.uncertainty,
+        getReportCovariance = getReportCovariance,
+        skip.delta.method = skip.delta.method,
+        strict = TRUE
+    )
+
+    if (length(ref$value) != length(nat$value)) {
+        stop("Value length mismatch between sdreport and sdreport_native.")
+    }
+    if (length(ref$sd) != length(nat$sd)) {
+        stop("SD length mismatch between sdreport and sdreport_native.")
+    }
+
+    max_abs <- function(x, y) {
+        d <- abs(as.numeric(x) - as.numeric(y))
+        if (length(d) == 0 || all(is.na(d))) {
+            return(NA_real_)
+        }
+        max(d, na.rm = TRUE)
+    }
+
+    diff_value <- max_abs(ref$value, nat$value)
+    diff_sd <- max_abs(ref$sd, nat$sd)
+    diff_cov <- NA_real_
+    if (compare.cov && is.matrix(ref$cov) && is.matrix(nat$cov)) {
+        if (!identical(dim(ref$cov), dim(nat$cov))) {
+            stop("Covariance dimension mismatch between sdreport and sdreport_native.")
+        }
+        diff_cov <- max_abs(ref$cov, nat$cov)
+    }
+
+    pass_value <- is.na(diff_value) || diff_value <= tolerance
+    pass_sd <- is.na(diff_sd) || diff_sd <= tolerance
+    pass_cov <- !compare.cov || is.na(diff_cov) || diff_cov <= tolerance
+
+    out <- list(
+        max_abs = list(value = diff_value, sd = diff_sd, cov = diff_cov),
+        tolerance = tolerance,
+        pass = list(value = pass_value, sd = pass_sd, cov = pass_cov, all = pass_value && pass_sd && pass_cov)
+    )
+    if (keep.objects) {
+        out$reference <- ref
+        out$native <- nat
+    }
+    out
+}
