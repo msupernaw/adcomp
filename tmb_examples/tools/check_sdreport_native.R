@@ -34,8 +34,9 @@ if (length(examples) == 0) {
     stop("No examples specified.")
 }
 cat("Running sdreport_native regression for examples:", paste(examples, collapse = ", "), "\n")
-fallback_example <- Sys.getenv("fallback_example", unset = "transform")
+fallback_example <- Sys.getenv("fallback_example", unset = "")
 joint_example <- Sys.getenv("joint_example", unset = "")
+bias_example <- Sys.getenv("bias_example", unset = "")
 
 # Build/load the local native kernel when not provided by installed TMB.
 if (!is.loaded("tmb_sdreport_delta_fixed") || !is.loaded("tmb_sdreport_delta_random")) {
@@ -65,20 +66,23 @@ for (i in seq_along(examples)) {
     ex <- examples[[i]]
     cat("\n--- Example:", ex, "---\n")
     entry <- list(pass = FALSE, error = NULL, cmp = NULL)
-    tryCatch({
-        expr <- sprintf(
-            "library(TMB); source('%s/TMB/R/sdreport.R'); updateCholesky <- get('updateCholesky', envir=asNamespace('TMB')); solveSubset <- get('solveSubset', envir=asNamespace('TMB')); runExample('%s', thisR=TRUE, exfolder='%s'); cmp <- compare_sdreport_native(obj, compare.cov=TRUE); print(cmp); if(!isTRUE(cmp$pass$all)) stop('max_abs differences exceeded tolerance')",
-            repo_root, ex, file.path(repo_root, "tmb_examples")
-        )
-        status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
-        entry$pass <- identical(status, 0L)
-        if (!entry$pass) {
-            entry$error <- sprintf("subprocess exited with status %d", status)
+    tryCatch(
+        {
+            expr <- sprintf(
+                "library(TMB); source('%s/TMB/R/sdreport.R'); updateCholesky <- get('updateCholesky', envir=asNamespace('TMB')); solveSubset <- get('solveSubset', envir=asNamespace('TMB')); runSymbolicAnalysis <- get('runSymbolicAnalysis', envir=asNamespace('TMB')); runExample('%s', thisR=TRUE, exfolder='%s'); cmp <- compare_sdreport_native(obj, compare.cov=TRUE); print(cmp); if(!isTRUE(cmp$pass$all)) stop('max_abs differences exceeded tolerance')",
+                repo_root, ex, file.path(repo_root, "tmb_examples")
+            )
+            status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
+            entry$pass <- identical(status, 0L)
+            if (!entry$pass) {
+                entry$error <- sprintf("subprocess exited with status %d", status)
+            }
+        },
+        error = function(e) {
+            entry$pass <<- FALSE
+            entry$error <<- conditionMessage(e)
         }
-    }, error = function(e) {
-        entry$pass <<- FALSE
-        entry$error <<- conditionMessage(e)
-    })
+    )
     results[[i]] <- entry
 }
 
@@ -87,6 +91,50 @@ if (nzchar(fallback_example)) {
     key <- paste0("fallback:", ex)
     cat("\n--- Fallback Example:", ex, "---\n")
     entry <- list(pass = FALSE, error = NULL, cmp = NULL)
+    tryCatch(
+        {
+            expr <- sprintf(
+                paste(
+                    "library(TMB)",
+                    "source('%s/TMB/R/sdreport.R')",
+                    "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
+                    "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
+                    "runSymbolicAnalysis <- get('runSymbolicAnalysis', envir=asNamespace('TMB'))",
+                    "runExample('%s', thisR=TRUE, exfolder='%s')",
+                    "ok <- FALSE",
+                    "tryCatch({ sdreport_native(obj, strict=TRUE, bias.correct=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
+                    "if (!ok) stop('strict fallback check failed')",
+                    "ref <- suppressWarnings(sdreport(obj, bias.correct=TRUE))",
+                    "nat <- suppressWarnings(sdreport_native(obj, strict=FALSE, bias.correct=TRUE))",
+                    "m <- function(x,y){ d <- abs(as.numeric(x)-as.numeric(y)); if(length(d)==0 || all(is.na(d))) return(NA_real_); max(d, na.rm=TRUE) }",
+                    "dv <- m(ref$value, nat$value)",
+                    "ds <- m(ref$sd, nat$sd)",
+                    "if (!is.na(dv) && dv > 1e-7) stop(sprintf('fallback value mismatch: %%g', dv))",
+                    "if (!is.na(ds) && ds > 1e-7) stop(sprintf('fallback sd mismatch: %%g', ds))",
+                    "cat('Fallback check passed for %s\\n')",
+                    sep = "; "
+                ),
+                repo_root, ex, file.path(repo_root, "tmb_examples"), ex
+            )
+            status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
+            entry$pass <- identical(status, 0L)
+            if (!entry$pass) {
+                entry$error <- sprintf("subprocess exited with status %d", status)
+            }
+        },
+        error = function(e) {
+            entry$pass <<- FALSE
+            entry$error <<- conditionMessage(e)
+        }
+    )
+    results[[key]] <- entry
+}
+
+if (nzchar(bias_example)) {
+    ex <- bias_example
+    key <- paste0("bias:", ex)
+    cat("\n--- Bias Correction Example:", ex, "---\n")
+    entry <- list(pass = FALSE, error = NULL, cmp = NULL)
     tryCatch({
         expr <- sprintf(
             paste(
@@ -94,18 +142,16 @@ if (nzchar(fallback_example)) {
                 "source('%s/TMB/R/sdreport.R')",
                 "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
                 "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
+                "runSymbolicAnalysis <- get('runSymbolicAnalysis', envir=asNamespace('TMB'))",
                 "runExample('%s', thisR=TRUE, exfolder='%s')",
-                "ok <- FALSE",
-                "tryCatch({ sdreport_native(obj, strict=TRUE, bias.correct=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
-                "if (!ok) stop('strict fallback check failed')",
-                "ref <- suppressWarnings(sdreport(obj, bias.correct=TRUE))",
-                "nat <- suppressWarnings(sdreport_native(obj, strict=FALSE, bias.correct=TRUE))",
+                "ref <- suppressWarnings(TMB::sdreport(obj, bias.correct=TRUE))",
+                "nat <- suppressWarnings(sdreport_native(obj, strict=TRUE, bias.correct=TRUE))",
+                "if (is.null(ref$unbiased) || is.null(nat$unbiased)) stop('missing unbiased payload')",
                 "m <- function(x,y){ d <- abs(as.numeric(x)-as.numeric(y)); if(length(d)==0 || all(is.na(d))) return(NA_real_); max(d, na.rm=TRUE) }",
-                "dv <- m(ref$value, nat$value)",
-                "ds <- m(ref$sd, nat$sd)",
-                "if (!is.na(dv) && dv > 1e-7) stop(sprintf('fallback value mismatch: %%g', dv))",
-                "if (!is.na(ds) && ds > 1e-7) stop(sprintf('fallback sd mismatch: %%g', ds))",
-                "cat('Fallback check passed for %s\\n')",
+                "du <- m(ref$unbiased$value, nat$unbiased$value)",
+                "if (!is.na(du) && du > 1e-7) stop(sprintf('bias-corrected value mismatch: %%g', du))",
+                "if (!is.null(ref$unbiased$sd) && !is.null(nat$unbiased$sd)) { ds <- m(ref$unbiased$sd, nat$unbiased$sd); if (!is.na(ds) && ds > 1e-7) stop(sprintf('bias-corrected sd mismatch: %%g', ds)) }",
+                "cat('Bias correction check passed for %s\\n')",
                 sep = "; "
             ),
             repo_root, ex, file.path(repo_root, "tmb_examples"), ex
@@ -127,36 +173,39 @@ if (nzchar(joint_example)) {
     key <- paste0("joint:", ex)
     cat("\n--- Joint Precision Example:", ex, "---\n")
     entry <- list(pass = FALSE, error = NULL, cmp = NULL)
-    tryCatch({
-        expr <- sprintf(
-            paste(
-                "library(TMB)",
-                "source('%s/TMB/R/sdreport.R')",
-                "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
-                "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
-                "runExample('%s', thisR=TRUE, exfolder='%s')",
-                "ref <- TMB::sdreport(obj, getJointPrecision=TRUE)",
-                "nat <- sdreport_native(obj, strict=TRUE, getJointPrecision=TRUE)",
-                "if (is.null(ref$jointPrecision) || is.null(nat$jointPrecision)) stop('jointPrecision missing')",
-                "if (!(inherits(ref$jointPrecision, 'Matrix') || is.matrix(ref$jointPrecision))) stop('reference jointPrecision type unsupported')",
-                "if (!(inherits(nat$jointPrecision, 'Matrix') || is.matrix(nat$jointPrecision))) stop('native jointPrecision type unsupported')",
-                "if (!identical(dim(ref$jointPrecision), dim(nat$jointPrecision))) stop('jointPrecision dimension mismatch')",
-                "dj <- max(abs(as.numeric(ref$jointPrecision) - as.numeric(nat$jointPrecision)), na.rm=TRUE)",
-                "if (!is.finite(dj) || dj > 1e-7) stop(sprintf('jointPrecision mismatch: %%g', dj))",
-                "cat('Joint precision check passed for %s\\n')",
-                sep = "; "
-            ),
-            repo_root, ex, file.path(repo_root, "tmb_examples"), ex
-        )
-        status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
-        entry$pass <- identical(status, 0L)
-        if (!entry$pass) {
-            entry$error <- sprintf("subprocess exited with status %d", status)
+    tryCatch(
+        {
+            expr <- sprintf(
+                paste(
+                    "library(TMB)",
+                    "source('%s/TMB/R/sdreport.R')",
+                    "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
+                    "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
+                    "runExample('%s', thisR=TRUE, exfolder='%s')",
+                    "ref <- TMB::sdreport(obj, getJointPrecision=TRUE)",
+                    "nat <- sdreport_native(obj, strict=TRUE, getJointPrecision=TRUE)",
+                    "if (is.null(ref$jointPrecision) || is.null(nat$jointPrecision)) stop('jointPrecision missing')",
+                    "if (!(inherits(ref$jointPrecision, 'Matrix') || is.matrix(ref$jointPrecision))) stop('reference jointPrecision type unsupported')",
+                    "if (!(inherits(nat$jointPrecision, 'Matrix') || is.matrix(nat$jointPrecision))) stop('native jointPrecision type unsupported')",
+                    "if (!identical(dim(ref$jointPrecision), dim(nat$jointPrecision))) stop('jointPrecision dimension mismatch')",
+                    "dj <- max(abs(as.numeric(ref$jointPrecision) - as.numeric(nat$jointPrecision)), na.rm=TRUE)",
+                    "if (!is.finite(dj) || dj > 1e-7) stop(sprintf('jointPrecision mismatch: %%g', dj))",
+                    "cat('Joint precision check passed for %s\\n')",
+                    sep = "; "
+                ),
+                repo_root, ex, file.path(repo_root, "tmb_examples"), ex
+            )
+            status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
+            entry$pass <- identical(status, 0L)
+            if (!entry$pass) {
+                entry$error <- sprintf("subprocess exited with status %d", status)
+            }
+        },
+        error = function(e) {
+            entry$pass <<- FALSE
+            entry$error <<- conditionMessage(e)
         }
-    }, error = function(e) {
-        entry$pass <<- FALSE
-        entry$error <<- conditionMessage(e)
-    })
+    )
     results[[key]] <- entry
 }
 

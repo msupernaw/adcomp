@@ -49,9 +49,8 @@ for unsupported configurations.
 \details{
 Current native support includes non-random and random effect models
 for the standard delta-method path, including
-\code{getJointPrecision}. Unsupported option is
-\code{bias.correct}; this falls back to \code{sdreport()} unless
-\code{strict=TRUE}.
+\code{getJointPrecision} and \code{bias.correct}. The
+\code{strict} argument is retained for compatibility.
 }
 \seealso{
 \code{\link{sdreport}}, \code{\link{summary.sdreport}}

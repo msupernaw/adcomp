@@ -782,12 +782,10 @@ sdreport_estimate_sd <- function(x, name) {
 ##' Native sdreport extension
 ##'
 ##' Drop-in extension of \code{sdreport()} that uses a native C++
-##' delta-method kernel when possible, and falls back to \code{sdreport()}
-##' for unsupported configurations.
+##' delta-method kernel and preserves \code{sdreport()} semantics.
 ##'
 ##' @inheritParams sdreport
-##' @param strict If \code{TRUE}, unsupported configurations raise an error
-##' instead of falling back to \code{sdreport()}.
+##' @param strict Reserved for compatibility.
 ##' @return Object of class \code{sdreport}
 ##' @export
 sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJointPrecision = FALSE, bias.correct = FALSE,
@@ -805,21 +803,6 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
             return(.Call(symbol, ...))
         }
         stop("Native symbol '", symbol, "' is not loaded.")
-    }
-
-    unsupported <- bias.correct
-    if (unsupported) {
-        if (strict) {
-            stop("'sdreport_native' currently does not support bias correction.")
-        }
-        return(sdreport(obj,
-            par.fixed = par.fixed, hessian.fixed = hessian.fixed,
-            getJointPrecision = getJointPrecision, bias.correct = bias.correct,
-            bias.correct.control = bias.correct.control,
-            ignore.parm.uncertainty = ignore.parm.uncertainty,
-            getReportCovariance = getReportCovariance,
-            skip.delta.method = skip.delta.method
-        ))
     }
 
     obj2 <- MakeADFun(obj$env$data,
@@ -988,6 +971,98 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
     if (exists("jointPrecision")) {
         ans$jointPrecision <- jointPrecision
     }
+
+    if (bias.correct && !is.null(r)) {
+        epsilon <- rep(0, length(phi))
+        names(epsilon) <- names(phi)
+        parameters <- obj$env$parameters
+        parameters$TMB_epsilon_ <- epsilon
+        doEpsilonMethod <- function(chunk = NULL) {
+            if (!is.null(chunk)) {
+                mapfac <- rep(NA, length(phi))
+                mapfac[chunk] <- chunk
+                parameters$TMB_epsilon_ <- updateMap(
+                    parameters$TMB_epsilon_,
+                    factor(mapfac)
+                )
+            }
+            obj3 <- MakeADFun(obj$env$data,
+                parameters,
+                random = obj$env$random,
+                checkParameterOrder = FALSE,
+                DLL = obj$env$DLL,
+                silent = obj$env$silent
+            )
+            obj3$env$start <- c(par, epsilon)
+            obj3$env$random.start <- expression(start[random])
+            h <- obj$env$spHess(random = TRUE)
+            h3 <- obj3$env$spHess(random = TRUE)
+            pattern.unchanged <- identical(h@i, h3@i) & identical(h@p, h3@p)
+            if (pattern.unchanged) {
+                if (!obj$env$silent) {
+                    cat("Re-using symbolic Cholesky\n")
+                }
+                obj3$env$L.created.by.newton <- L
+            } else {
+                if (.Call("have_tmb_symbolic", PACKAGE = "TMB")) {
+                    runSymbolicAnalysis(obj3)
+                }
+            }
+            if (!is.null(chunk)) epsilon <- epsilon[chunk]
+            par.full <- c(par.fixed, epsilon)
+            i <- seq_along(par.full) > length(par.fixed)
+            grad <- obj3$gr(par.full)
+            Vestimate <-
+                if (bias.correct.control$sd) {
+                    hess <- numDeriv::jacobian(obj3$gr, par.full)
+                    -hess[i, i] + hess[i, !i] %*% Vtheta %*% hess[!i, i]
+                } else {
+                    matrix(NA)
+                }
+            estimate <- grad[i]
+            names(estimate) <- names(epsilon)
+            list(value = estimate, sd = sqrt(diag(Vestimate)), cov = Vestimate)
+        }
+        nsplit <- bias.correct.control$nsplit
+        if (is.null(nsplit)) {
+            split <- bias.correct.control$split
+        } else {
+            split <- split(
+                seq_along(phi),
+                cut(seq_along(phi), nsplit)
+            )
+        }
+        if (is.null(split)) {
+            ans$unbiased <- doEpsilonMethod()
+        } else {
+            tmp <- lapply(split, doEpsilonMethod)
+            m <- if (bias.correct.control$sd) {
+                length(phi)
+            } else {
+                1
+            }
+            ans$unbiased <- list(
+                value = rep(NA, length(phi)),
+                sd = rep(NA, m),
+                cov = matrix(NA, m, m)
+            )
+            for (i in seq_along(split)) {
+                ans$unbiased$value[split[[i]]] <- tmp[[i]]$value
+                if (bias.correct.control$sd) {
+                    ans$unbiased$sd[split[[i]]] <- tmp[[i]]$sd
+                    ans$unbiased$cov[
+                        split[[i]],
+                        split[[i]]
+                    ] <- tmp[[i]]$cov
+                }
+            }
+        }
+    }
+    if (bias.correct && is.null(r)) {
+        ans$unbiased <- list(value = ans$value, sd = ans$sd, cov = ans$cov)
+        warning("'bias.correct' does nothing without random effects")
+    }
+
     ans$env <- new.env(parent = emptyenv())
     ans$env$parameters <- obj$env$parameters
     ans$env$random <- obj$env$random
