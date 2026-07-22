@@ -143,6 +143,8 @@ struct sdreport_access
 
 typedef SEXP (*tmb_sdreport_get_uncertainty_t)(SEXP, SEXP);
 typedef SEXP (*tmb_sdreport_get_scalar_estimate_sd_t)(SEXP, SEXP);
+typedef SEXP (*tmb_sdreport_native_get_uncertainty_t)(SEXP, SEXP);
+typedef SEXP (*tmb_sdreport_native_get_scalar_estimate_sd_t)(SEXP, SEXP);
 
 inline tmb_sdreport_get_uncertainty_t tmb_sdreport_getter()
 {
@@ -162,6 +164,28 @@ inline tmb_sdreport_get_scalar_estimate_sd_t tmb_sdreport_scalar_getter()
     {
         fn = (tmb_sdreport_get_scalar_estimate_sd_t)
             R_GetCCallable("TMB", "tmb_sdreport_get_scalar_estimate_sd");
+    }
+    return fn;
+}
+
+inline tmb_sdreport_native_get_uncertainty_t tmb_sdreport_native_getter()
+{
+    static tmb_sdreport_native_get_uncertainty_t fn = NULL;
+    if (fn == NULL)
+    {
+        fn = (tmb_sdreport_native_get_uncertainty_t)
+            R_GetCCallable("TMB", "tmb_sdreport_native_get_uncertainty");
+    }
+    return fn;
+}
+
+inline tmb_sdreport_native_get_scalar_estimate_sd_t tmb_sdreport_native_scalar_getter()
+{
+    static tmb_sdreport_native_get_scalar_estimate_sd_t fn = NULL;
+    if (fn == NULL)
+    {
+        fn = (tmb_sdreport_native_get_scalar_estimate_sd_t)
+            R_GetCCallable("TMB", "tmb_sdreport_native_get_scalar_estimate_sd");
     }
     return fn;
 }
@@ -188,6 +212,38 @@ inline std::pair<double, double> tmb_get_sdreport_scalar(SEXP rep, const char *n
     SEXP key;
     PROTECT(key = Rf_mkString(name));
     SEXP ans = tmb_sdreport_scalar_getter()(rep, key);
+    if (!Rf_isReal(ans) || XLENGTH(ans) != 2)
+    {
+        UNPROTECT(1);
+        Rf_error("Unexpected return from scalar sdreport accessor.");
+    }
+    std::pair<double, double> out(REAL(ans)[0], REAL(ans)[1]);
+    UNPROTECT(1);
+    return out;
+}
+
+inline SEXP tmb_run_sdreport_native_uncertainty(SEXP obj, const char *name = NULL)
+{
+    if (name == NULL)
+    {
+        return tmb_sdreport_native_getter()(obj, R_NilValue);
+    }
+    SEXP key;
+    PROTECT(key = Rf_mkString(name));
+    SEXP ans = tmb_sdreport_native_getter()(obj, key);
+    UNPROTECT(1);
+    return ans;
+}
+
+inline std::pair<double, double> tmb_run_sdreport_native_scalar(SEXP obj, const char *name)
+{
+    if (name == NULL)
+    {
+        Rf_error("'name' must not be NULL for scalar sdreport lookup.");
+    }
+    SEXP key;
+    PROTECT(key = Rf_mkString(name));
+    SEXP ans = tmb_sdreport_native_scalar_getter()(obj, key);
     if (!Rf_isReal(ans) || XLENGTH(ans) != 2)
     {
         UNPROTECT(1);

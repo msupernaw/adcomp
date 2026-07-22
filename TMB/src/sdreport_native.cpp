@@ -2,6 +2,33 @@
 #include <R.h>
 #include <Rinternals.h>
 
+static SEXP call_sdreport_native(SEXP obj)
+{
+    SEXP ns_call = PROTECT(Rf_lang2(Rf_install("asNamespace"), Rf_mkString("TMB")));
+    SEXP ns = PROTECT(Rf_eval(ns_call, R_BaseEnv));
+    SEXP fn = PROTECT(Rf_findVarInFrame(ns, Rf_install("sdreport_native")));
+    SEXP eval_env = ns;
+    if (fn == R_UnboundValue || TYPEOF(fn) != CLOSXP)
+    {
+        fn = Rf_findVarInFrame(R_GlobalEnv, Rf_install("sdreport_native"));
+        eval_env = R_GlobalEnv;
+    }
+    if (fn == R_UnboundValue || TYPEOF(fn) != CLOSXP)
+    {
+        UNPROTECT(3);
+        Rf_error("Could not resolve sdreport_native in TMB namespace or global environment.");
+    }
+
+    SEXP strict_value = PROTECT(Rf_ScalarLogical(FALSE));
+    SEXP strict_arg = PROTECT(Rf_cons(strict_value, R_NilValue));
+    SET_TAG(strict_arg, Rf_install("strict"));
+
+    SEXP call = PROTECT(Rf_lcons(fn, Rf_cons(obj, strict_arg)));
+    SEXP rep = PROTECT(Rf_eval(call, eval_env));
+    UNPROTECT(7);
+    return rep;
+}
+
 static SEXP get_list_element(SEXP list, const char *name)
 {
     SEXP names = Rf_getAttrib(list, R_NamesSymbol);
@@ -128,6 +155,22 @@ extern "C" SEXP tmb_sdreport_get_scalar_estimate_sd(SEXP rep, SEXP name)
     SET_STRING_ELT(out_names, 1, Rf_mkChar("sd"));
     Rf_setAttrib(out, R_NamesSymbol, out_names);
     UNPROTECT(2);
+    return out;
+}
+
+extern "C" SEXP tmb_sdreport_native_get_uncertainty(SEXP obj, SEXP name)
+{
+    SEXP rep = PROTECT(call_sdreport_native(obj));
+    SEXP out = tmb_sdreport_get_uncertainty(rep, name);
+    UNPROTECT(1);
+    return out;
+}
+
+extern "C" SEXP tmb_sdreport_native_get_scalar_estimate_sd(SEXP obj, SEXP name)
+{
+    SEXP rep = PROTECT(call_sdreport_native(obj));
+    SEXP out = tmb_sdreport_get_scalar_estimate_sd(rep, name);
+    UNPROTECT(1);
     return out;
 }
 

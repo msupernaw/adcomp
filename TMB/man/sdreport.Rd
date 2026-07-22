@@ -180,6 +180,13 @@ For scalar quantities a dedicated accessor is available through
 \code{sdreport_estimate_sd(rep, name)} and the C-callable symbol
 \code{tmb_sdreport_get_scalar_estimate_sd}.
 
+For backends that do not want to materialize or pass \code{rep},
+TMB also exposes C-callable entry points that run
+\code{sdreport_native(obj, strict=FALSE)} internally and return the
+same uncertainty payload directly from \code{obj}:
+\code{tmb_sdreport_native_get_uncertainty} and
+\code{tmb_sdreport_native_get_scalar_estimate_sd}.
+
 A minimal C++ consumer pattern (e.g. in FIMS) is:
 \preformatted{
 #include <TMB.hpp>
@@ -195,5 +202,7 @@ End-to-end workflow:
 \item Build \code{rep <- sdreport(obj)}.
 \item Extract in R via \code{sdreport_estimate_sd(rep, "total_mortality")}.
 \item Extract in C++ via \code{tmb_get_sdreport_scalar(rep, "total_mortality")}.
+\item Or extract directly from \code{obj} in C++ via
+\code{tmb_run_sdreport_native_scalar(obj, "total_mortality")}. 
 }
 }

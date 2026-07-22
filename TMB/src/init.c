@@ -29,6 +29,8 @@ SEXP tmb_ldl_update(SEXP X, SEXP Y);
 SEXP tmb_ldl_deriv(SEXP L);
 SEXP tmb_sdreport_get_uncertainty(SEXP rep, SEXP name);
 SEXP tmb_sdreport_get_scalar_estimate_sd(SEXP rep, SEXP name);
+SEXP tmb_sdreport_native_get_uncertainty(SEXP obj, SEXP name);
+SEXP tmb_sdreport_native_get_scalar_estimate_sd(SEXP obj, SEXP name);
 SEXP tmb_sdreport_delta_fixed(SEXP phi, SEXP jac, SEXP Vtheta);
 SEXP tmb_sdreport_delta_random(SEXP phi, SEXP Dphi_random, SEXP A, SEXP hessian_random, SEXP Vtheta, SEXP ignore_parm_uncertainty);
 
@@ -55,6 +57,8 @@ static R_CallMethodDef CallEntries[] = {
     CALLDEF(tmb_ldl_deriv, 1),
     CALLDEF(tmb_sdreport_get_uncertainty, 2),
     CALLDEF(tmb_sdreport_get_scalar_estimate_sd, 2),
+    CALLDEF(tmb_sdreport_native_get_uncertainty, 2),
+    CALLDEF(tmb_sdreport_native_get_scalar_estimate_sd, 2),
     CALLDEF(tmb_sdreport_delta_fixed, 3),
     CALLDEF(tmb_sdreport_delta_random, 6),
     {NULL, NULL, 0}
@@ -66,6 +70,8 @@ void R_init_TMB(DllInfo *dll)
     R_useDynamicSymbols(dll, (Rboolean)FALSE);
     R_RegisterCCallable("TMB", "tmb_sdreport_get_uncertainty", (DL_FUNC) &tmb_sdreport_get_uncertainty);
     R_RegisterCCallable("TMB", "tmb_sdreport_get_scalar_estimate_sd", (DL_FUNC) &tmb_sdreport_get_scalar_estimate_sd);
+    R_RegisterCCallable("TMB", "tmb_sdreport_native_get_uncertainty", (DL_FUNC) &tmb_sdreport_native_get_uncertainty);
+    R_RegisterCCallable("TMB", "tmb_sdreport_native_get_scalar_estimate_sd", (DL_FUNC) &tmb_sdreport_native_get_scalar_estimate_sd);
     M_R_cholmod_start(&c);
     c.error_handler = NULL; // Disable CHOLMOD warnings
 }
