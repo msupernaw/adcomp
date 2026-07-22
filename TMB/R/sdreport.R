@@ -793,6 +793,10 @@ sdreport_estimate_sd <- function(x, name) {
 sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJointPrecision = FALSE, bias.correct = FALSE,
                             bias.correct.control = list(sd = FALSE, split = NULL, nsplit = NULL), ignore.parm.uncertainty = FALSE,
                             getReportCovariance = TRUE, skip.delta.method = FALSE, strict = FALSE) {
+    if (is.null(obj$env$ADGrad) && (!is.null(obj$env$random))) {
+        stop("Cannot calculate sd's without type ADGrad available in object for random effect models.")
+    }
+
     call_native <- function(symbol, ..., package = "TMB") {
         if (is.loaded(symbol, PACKAGE = package)) {
             return(.Call(symbol, ..., PACKAGE = package))
@@ -803,10 +807,10 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         stop("Native symbol '", symbol, "' is not loaded.")
     }
 
-    unsupported <- !is.null(obj$env$random) || bias.correct || getJointPrecision
+    unsupported <- bias.correct || getJointPrecision
     if (unsupported) {
         if (strict) {
-            stop("'sdreport_native' currently supports non-random models without bias correction or joint precision.")
+            stop("'sdreport_native' currently does not support bias correction or joint precision.")
         }
         return(sdreport(obj,
             par.fixed = par.fixed, hessian.fixed = hessian.fixed,
@@ -826,11 +830,16 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         silent = obj$env$silent
     )
 
+    r <- obj$env$random
+
     if (is.null(par.fixed)) {
-        par.fixed <- obj$env$last.par.best
+        par <- obj$env$last.par.best
+        if (!is.null(r)) par.fixed <- par[-r] else par.fixed <- par
+        gradient.fixed <- obj$gr(par.fixed)
+    } else {
+        gradient.fixed <- obj$gr(par.fixed)
+        par <- obj$env$last.par
     }
-    gradient.fixed <- obj$gr(par.fixed)
-    par <- obj$env$last.par
 
     if (length(par.fixed) == 0) ignore.parm.uncertainty <- TRUE
     if (ignore.parm.uncertainty) {
@@ -846,12 +855,58 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         if (is(Vtheta, "try-error")) Vtheta <- hessian.fixed * NaN
     }
 
+    if (!is.null(r)) {
+        hessian.random <- obj$env$spHess(par, random = TRUE)
+        L <- obj$env$L.created.by.newton
+        if (!is.null(L)) {
+            updateCholesky(L, hessian.random)
+            hessian.random@factors <- list(SPdCholesky = L)
+        }
+    }
+
     phi <- try(obj2$fn(par), silent = TRUE)
     if (is.character(phi) || length(phi) == 0) {
         phi <- numeric(0)
     }
-    jac <- if (length(phi) > 0) obj2$gr(par) else matrix(0, 0, length(par.fixed))
-    native <- call_native("tmb_sdreport_delta_fixed", as.double(phi), as.matrix(jac), as.matrix(Vtheta))
+
+    native <- list(value = as.double(phi), sd = numeric(length(phi)), cov = matrix(0, length(phi), length(phi)))
+    if (!skip.delta.method && length(phi) > 0) {
+        Dphi <- obj2$gr(par)
+        if (is.null(r)) {
+            native <- call_native("tmb_sdreport_delta_fixed", as.double(phi), as.matrix(Dphi), as.matrix(Vtheta))
+        } else {
+            Dphi.random <- Dphi[, r, drop = FALSE]
+            Dphi.fixed <- Dphi[, -r, drop = FALSE]
+            if (all(Dphi.random == 0)) {
+                native <- call_native("tmb_sdreport_delta_fixed", as.double(phi), as.matrix(Dphi.fixed), as.matrix(Vtheta))
+            } else {
+                tmp <- solve(hessian.random, t(Dphi.random))
+                tmp <- as.matrix(tmp)
+                if (ignore.parm.uncertainty) {
+                    A <- matrix(0, nrow(Dphi.fixed), ncol(Dphi.fixed))
+                } else {
+                    f <- obj$env$f
+                    w <- rep(0, length(par))
+                    obj$env$f(par, order = 0, type = "ADGrad")
+                    reverse.sweep <- function(i) {
+                        w[r] <- tmp[, i]
+                        -f(par, order = 1, type = "ADGrad", rangeweight = w, doforward = 0)[-r]
+                    }
+                    A <- t(do.call("cbind", lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
+                }
+                native <- call_native(
+                    "tmb_sdreport_delta_random",
+                    as.double(phi),
+                    as.matrix(Dphi.random),
+                    as.matrix(A),
+                    as.matrix(hessian.random),
+                    as.matrix(Vtheta),
+                    as.logical(ignore.parm.uncertainty)
+                )
+            }
+        }
+    }
+
     if (skip.delta.method) {
         native$sd <- rep(NA_real_, length(native$value))
         native$cov <- NA

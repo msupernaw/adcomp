@@ -47,8 +47,10 @@ delta-method kernel when possible, and falls back to \code{sdreport()}
 for unsupported configurations.
 }
 \details{
-Current native support is limited to non-random models without bias
-correction and without \code{getJointPrecision}.
+Current native support includes non-random and random effect models
+for the standard delta-method path. Unsupported options are bias
+correction and \code{getJointPrecision}; these fall back to
+\code{sdreport()} unless \code{strict=TRUE}.
 }
 \seealso{
 \code{\link{sdreport}}, \code{\link{summary.sdreport}}

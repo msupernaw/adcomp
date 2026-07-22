@@ -1,4 +1,4 @@
-## Regression check for sdreport_native parity on a non-random model
+## Regression check for sdreport_native parity on supported models
 library(TMB)
 
 args <- commandArgs(trailingOnly = FALSE)
@@ -37,7 +37,7 @@ cat("Running sdreport_native regression for examples:", paste(examples, collapse
 fallback_example <- Sys.getenv("fallback_example", unset = "transform")
 
 # Build/load the local native kernel when not provided by installed TMB.
-if (!is.loaded("tmb_sdreport_delta_fixed")) {
+if (!is.loaded("tmb_sdreport_delta_fixed") || !is.loaded("tmb_sdreport_delta_random")) {
     src <- file.path(repo_root, "TMB", "src", "sdreport_native.cpp")
     include_tmb <- file.path(repo_root, "TMB", "inst", "include")
     include_eigen <- system.file("include", package = "RcppEigen")
@@ -66,7 +66,7 @@ for (i in seq_along(examples)) {
     entry <- list(pass = FALSE, error = NULL, cmp = NULL)
     tryCatch({
         expr <- sprintf(
-            "library(TMB); source('%s/TMB/R/sdreport.R'); runExample('%s', thisR=TRUE, exfolder='%s'); cmp <- compare_sdreport_native(obj, compare.cov=TRUE); print(cmp); if(!isTRUE(cmp$pass$all)) stop('max_abs differences exceeded tolerance')",
+            "library(TMB); source('%s/TMB/R/sdreport.R'); updateCholesky <- get('updateCholesky', envir=asNamespace('TMB')); solveSubset <- get('solveSubset', envir=asNamespace('TMB')); runExample('%s', thisR=TRUE, exfolder='%s'); cmp <- compare_sdreport_native(obj, compare.cov=TRUE); print(cmp); if(!isTRUE(cmp$pass$all)) stop('max_abs differences exceeded tolerance')",
             repo_root, ex, file.path(repo_root, "tmb_examples")
         )
         status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
@@ -90,12 +90,19 @@ if (nzchar(fallback_example)) {
         expr <- sprintf(
             paste(
                 "library(TMB)",
+                "source('%s/TMB/R/sdreport.R')",
+                "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
+                "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
                 "runExample('%s', thisR=TRUE, exfolder='%s')",
                 "ok <- FALSE",
-                "tryCatch({ TMB::sdreport_native(obj, strict=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
+                "tryCatch({ sdreport_native(obj, strict=TRUE, getJointPrecision=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
                 "if (!ok) stop('strict fallback check failed')",
-                "ref <- TMB::sdreport(obj)",
-                "nat <- TMB::sdreport_native(obj, strict=FALSE)",
+                "ref <- sdreport(obj, getJointPrecision=TRUE)",
+                "nat <- sdreport_native(obj, strict=FALSE, getJointPrecision=TRUE)",
+                "has_ref_jp <- is.matrix(ref$jointPrecision)",
+                "has_nat_jp <- is.matrix(nat$jointPrecision)",
+                "if (!identical(has_ref_jp, has_nat_jp)) stop('jointPrecision presence mismatch in fallback output')",
+                "if (has_ref_jp && !identical(dim(ref$jointPrecision), dim(nat$jointPrecision))) stop('jointPrecision dim mismatch in fallback output')",
                 "m <- function(x,y){ d <- abs(as.numeric(x)-as.numeric(y)); if(length(d)==0 || all(is.na(d))) return(NA_real_); max(d, na.rm=TRUE) }",
                 "dv <- m(ref$value, nat$value)",
                 "ds <- m(ref$sd, nat$sd)",
@@ -104,7 +111,7 @@ if (nzchar(fallback_example)) {
                 "cat('Fallback check passed for %s\\n')",
                 sep = "; "
             ),
-            ex, file.path(repo_root, "tmb_examples"), ex
+            repo_root, ex, file.path(repo_root, "tmb_examples"), ex
         )
         status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
         entry$pass <- identical(status, 0L)

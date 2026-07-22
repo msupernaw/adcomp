@@ -80,8 +80,6 @@ SuiteSparse/libcholmod.so: SuiteSparse
 install-metis-full: SuiteSparse/libcholmod.so
 	make build-package
 	LIBCHOLMOD=`pwd`/SuiteSparse/libcholmod.so R CMD INSTALL --preclean $(TARBALL)
-
-## Get a rough changelog since most recent github revision tag
 ## (Use as starting point when updating NEWS file)
 ## NOTE: Run *after* updating version and date in DESCRIPTION.
 changelog:
@@ -132,7 +130,7 @@ test-tmb_examples:
 
 test-sdreport-native:
 	$(R) --version
-	examples=linreg,linreg_parallel,longlinreg fallback_example=transform Rscript tmb_examples/tools/check_sdreport_native.R
+	examples=linreg,linreg_parallel,longlinreg,transform fallback_example=linreg Rscript tmb_examples/tools/check_sdreport_native.R
 
 doxygen:
 	cd dox; make all

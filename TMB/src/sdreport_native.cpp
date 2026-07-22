@@ -168,3 +168,77 @@ extern "C" SEXP tmb_sdreport_delta_fixed(SEXP phi_sexp, SEXP jac_sexp, SEXP Vthe
     UNPROTECT(2);
     return ans;
 }
+
+extern "C" SEXP tmb_sdreport_delta_random(SEXP phi_sexp,
+                                            SEXP dphi_random_sexp,
+                                            SEXP a_sexp,
+                                            SEXP hessian_random_sexp,
+                                            SEXP vtheta_sexp,
+                                            SEXP ignore_parm_uncertainty_sexp)
+{
+    if (!Rf_isReal(phi_sexp))
+        Rf_error("'phi' must be numeric.");
+    if (!Rf_isReal(dphi_random_sexp) || !Rf_isMatrix(dphi_random_sexp))
+        Rf_error("'Dphi_random' must be a numeric matrix.");
+    if (!Rf_isReal(a_sexp) || !Rf_isMatrix(a_sexp))
+        Rf_error("'A' must be a numeric matrix.");
+    if (!Rf_isReal(hessian_random_sexp) || !Rf_isMatrix(hessian_random_sexp))
+        Rf_error("'hessian_random' must be a numeric matrix.");
+    if (!Rf_isReal(vtheta_sexp) || !Rf_isMatrix(vtheta_sexp))
+        Rf_error("'Vtheta' must be a numeric matrix.");
+    if (!Rf_isLogical(ignore_parm_uncertainty_sexp) || XLENGTH(ignore_parm_uncertainty_sexp) != 1)
+        Rf_error("'ignore_parm_uncertainty' must be a single logical value.");
+
+    const bool ignore_parm_uncertainty = LOGICAL(ignore_parm_uncertainty_sexp)[0] == TRUE;
+    Eigen::VectorXd phi = as_vector(phi_sexp);
+    Eigen::MatrixXd dphi_random = as_matrix(dphi_random_sexp);
+    Eigen::MatrixXd a = as_matrix(a_sexp);
+    Eigen::MatrixXd hessian_random = as_matrix(hessian_random_sexp);
+    Eigen::MatrixXd vtheta = as_matrix(vtheta_sexp);
+
+    if (dphi_random.rows() != phi.size())
+        Rf_error("Dphi_random rows do not match phi length.");
+    if (a.rows() != phi.size())
+        Rf_error("A rows do not match phi length.");
+    if (hessian_random.rows() != hessian_random.cols())
+        Rf_error("hessian_random must be square.");
+    if (dphi_random.cols() != hessian_random.rows())
+        Rf_error("Dphi_random columns do not match hessian_random dimensions.");
+    if (vtheta.rows() != vtheta.cols())
+        Rf_error("Vtheta must be square.");
+    if (a.cols() != vtheta.rows())
+        Rf_error("A columns do not match Vtheta dimensions.");
+
+    Eigen::LDLT<Eigen::MatrixXd> ldlt(hessian_random);
+    if (ldlt.info() != Eigen::Success)
+        Rf_error("Failed LDLT factorization of hessian_random.");
+
+    Eigen::MatrixXd tmp = ldlt.solve(dphi_random.transpose());
+    if (ldlt.info() != Eigen::Success)
+        Rf_error("Failed solving hessian_random system.");
+
+    Eigen::MatrixXd term1 = dphi_random * tmp;
+    Eigen::MatrixXd cov = term1;
+    if (!ignore_parm_uncertainty)
+    {
+        cov += a * vtheta * a.transpose();
+    }
+
+    Eigen::VectorXd sd(cov.rows());
+    for (int i = 0; i < cov.rows(); ++i)
+        sd(i) = sqrt(cov(i, i));
+
+    SEXP ans, ans_names;
+    PROTECT(ans = Rf_allocVector(VECSXP, 3));
+    PROTECT(ans_names = Rf_allocVector(STRSXP, 3));
+    SET_VECTOR_ELT(ans, 0, as_sexp(phi));
+    SET_VECTOR_ELT(ans, 1, as_sexp(sd));
+    SET_VECTOR_ELT(ans, 2, as_sexp(cov));
+    SET_STRING_ELT(ans_names, 0, Rf_mkChar("value"));
+    SET_STRING_ELT(ans_names, 1, Rf_mkChar("sd"));
+    SET_STRING_ELT(ans_names, 2, Rf_mkChar("cov"));
+    Rf_setAttrib(ans, R_NamesSymbol, ans_names);
+
+    UNPROTECT(2);
+    return ans;
+}
