@@ -935,10 +935,14 @@ compare_sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL,
 
     max_abs <- function(x, y) {
         d <- abs(as.numeric(x) - as.numeric(y))
-        if (length(d) == 0 || all(is.na(d))) {
-            return(NA_real_)
+        if (length(d) == 0) {
+            return(0)
         }
-        max(d, na.rm = TRUE)
+        d <- d[!is.na(d)]
+        if (length(d) == 0) {
+            return(0)
+        }
+        max(d)
     }
 
     diff_value <- max_abs(ref$value, nat$value)
