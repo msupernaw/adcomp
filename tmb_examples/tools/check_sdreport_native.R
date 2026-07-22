@@ -27,7 +27,8 @@ if (nzchar(examples_env)) {
     examples <- trimws(strsplit(examples_env, ",", fixed = TRUE)[[1]])
     examples <- examples[nzchar(examples)]
 } else {
-    examples <- Sys.getenv("example", unset = "linreg_parallel")
+    examples <- trimws(strsplit(Sys.getenv("example", unset = "linreg,linreg_parallel,longlinreg"), ",", fixed = TRUE)[[1]])
+    examples <- examples[nzchar(examples)]
 }
 if (length(examples) == 0) {
     stop("No examples specified.")
