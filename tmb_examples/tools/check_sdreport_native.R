@@ -35,6 +35,7 @@ if (length(examples) == 0) {
 }
 cat("Running sdreport_native regression for examples:", paste(examples, collapse = ", "), "\n")
 fallback_example <- Sys.getenv("fallback_example", unset = "transform")
+joint_example <- Sys.getenv("joint_example", unset = "")
 
 # Build/load the local native kernel when not provided by installed TMB.
 if (!is.loaded("tmb_sdreport_delta_fixed") || !is.loaded("tmb_sdreport_delta_random")) {
@@ -95,20 +96,54 @@ if (nzchar(fallback_example)) {
                 "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
                 "runExample('%s', thisR=TRUE, exfolder='%s')",
                 "ok <- FALSE",
-                "tryCatch({ sdreport_native(obj, strict=TRUE, getJointPrecision=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
+                "tryCatch({ sdreport_native(obj, strict=TRUE, bias.correct=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
                 "if (!ok) stop('strict fallback check failed')",
-                "ref <- sdreport(obj, getJointPrecision=TRUE)",
-                "nat <- sdreport_native(obj, strict=FALSE, getJointPrecision=TRUE)",
-                "has_ref_jp <- is.matrix(ref$jointPrecision)",
-                "has_nat_jp <- is.matrix(nat$jointPrecision)",
-                "if (!identical(has_ref_jp, has_nat_jp)) stop('jointPrecision presence mismatch in fallback output')",
-                "if (has_ref_jp && !identical(dim(ref$jointPrecision), dim(nat$jointPrecision))) stop('jointPrecision dim mismatch in fallback output')",
+                "ref <- suppressWarnings(sdreport(obj, bias.correct=TRUE))",
+                "nat <- suppressWarnings(sdreport_native(obj, strict=FALSE, bias.correct=TRUE))",
                 "m <- function(x,y){ d <- abs(as.numeric(x)-as.numeric(y)); if(length(d)==0 || all(is.na(d))) return(NA_real_); max(d, na.rm=TRUE) }",
                 "dv <- m(ref$value, nat$value)",
                 "ds <- m(ref$sd, nat$sd)",
                 "if (!is.na(dv) && dv > 1e-7) stop(sprintf('fallback value mismatch: %%g', dv))",
                 "if (!is.na(ds) && ds > 1e-7) stop(sprintf('fallback sd mismatch: %%g', ds))",
                 "cat('Fallback check passed for %s\\n')",
+                sep = "; "
+            ),
+            repo_root, ex, file.path(repo_root, "tmb_examples"), ex
+        )
+        status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
+        entry$pass <- identical(status, 0L)
+        if (!entry$pass) {
+            entry$error <- sprintf("subprocess exited with status %d", status)
+        }
+    }, error = function(e) {
+        entry$pass <<- FALSE
+        entry$error <<- conditionMessage(e)
+    })
+    results[[key]] <- entry
+}
+
+if (nzchar(joint_example)) {
+    ex <- joint_example
+    key <- paste0("joint:", ex)
+    cat("\n--- Joint Precision Example:", ex, "---\n")
+    entry <- list(pass = FALSE, error = NULL, cmp = NULL)
+    tryCatch({
+        expr <- sprintf(
+            paste(
+                "library(TMB)",
+                "source('%s/TMB/R/sdreport.R')",
+                "updateCholesky <- get('updateCholesky', envir=asNamespace('TMB'))",
+                "solveSubset <- get('solveSubset', envir=asNamespace('TMB'))",
+                "runExample('%s', thisR=TRUE, exfolder='%s')",
+                "ref <- TMB::sdreport(obj, getJointPrecision=TRUE)",
+                "nat <- sdreport_native(obj, strict=TRUE, getJointPrecision=TRUE)",
+                "if (is.null(ref$jointPrecision) || is.null(nat$jointPrecision)) stop('jointPrecision missing')",
+                "if (!(inherits(ref$jointPrecision, 'Matrix') || is.matrix(ref$jointPrecision))) stop('reference jointPrecision type unsupported')",
+                "if (!(inherits(nat$jointPrecision, 'Matrix') || is.matrix(nat$jointPrecision))) stop('native jointPrecision type unsupported')",
+                "if (!identical(dim(ref$jointPrecision), dim(nat$jointPrecision))) stop('jointPrecision dimension mismatch')",
+                "dj <- max(abs(as.numeric(ref$jointPrecision) - as.numeric(nat$jointPrecision)), na.rm=TRUE)",
+                "if (!is.finite(dj) || dj > 1e-7) stop(sprintf('jointPrecision mismatch: %%g', dj))",
+                "cat('Joint precision check passed for %s\\n')",
                 sep = "; "
             ),
             repo_root, ex, file.path(repo_root, "tmb_examples"), ex

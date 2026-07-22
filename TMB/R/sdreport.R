@@ -807,10 +807,10 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         stop("Native symbol '", symbol, "' is not loaded.")
     }
 
-    unsupported <- bias.correct || getJointPrecision
+    unsupported <- bias.correct
     if (unsupported) {
         if (strict) {
-            stop("'sdreport_native' currently does not support bias correction or joint precision.")
+            stop("'sdreport_native' currently does not support bias correction.")
         }
         return(sdreport(obj,
             par.fixed = par.fixed, hessian.fixed = hessian.fixed,
@@ -914,6 +914,64 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         native$cov <- NA
     }
 
+    if (!is.null(r)) {
+        if (is(L, "dCHMsuper")) {
+            diag.term1 <- solveSubset(L = L, diag = TRUE)
+            if (ignore.parm.uncertainty) {
+                diag.term2 <- 0
+            } else {
+                f <- obj$env$f
+                w <- rep(0, length(par))
+                obj$env$f(par, order = 0, type = "ADGrad")
+                reverse.sweep <- function(i) {
+                    w[i] <- 1
+                    f(par, order = 1, type = "ADGrad", rangeweight = w, doforward = 0)[r]
+                }
+                nonr <- setdiff(seq_along(par), r)
+                framework <- .Call("getFramework", PACKAGE = obj$env$DLL)
+                if (framework != "TMBad") {
+                    tmp <- sapply(nonr, reverse.sweep)
+                } else {
+                    if (length(r) <= length(nonr)) {
+                        tmp <- f(par, order = 1, type = "ADGrad", keepx = nonr, keepy = r)
+                    } else {
+                        ADGrad <- obj$env$ADGrad
+                        obj$env$retape_adgrad(lazy = FALSE)
+                        tmp <- t(f(par, order = 1, type = "ADGrad", keepx = r, keepy = nonr))
+                        obj$env$ADGrad <- ADGrad
+                    }
+                }
+                if (!is.matrix(tmp)) {
+                    tmp <- matrix(tmp, ncol = length(nonr))
+                }
+                A <- solve(hessian.random, tmp)
+                diag.term2 <- rowSums((A %*% Vtheta) * A)
+            }
+            par.random <- par[r]
+            diag.cov.random <- diag.term1 + diag.term2
+            if (getJointPrecision) {
+                if (length(par.fixed) == 0) {
+                    jointPrecision <- hessian.random
+                } else if (!ignore.parm.uncertainty) {
+                    G <- hessian.random %*% A
+                    G <- as.matrix(G)
+                    M1 <- Matrix::cbind2(hessian.random, G)
+                    M2 <- Matrix::cbind2(t(G), as.matrix(t(A) %*% G) + hessian.fixed)
+                    M <- Matrix::rbind2(M1, M2)
+                    M <- Matrix::forceSymmetric(M, uplo = "L")
+                    dn <- c(names(par)[r], names(par[-r]))
+                    dimnames(M) <- list(dn, dn)
+                    p <- Matrix::invPerm(c(r, seq_along(par)[-r]))
+                    jointPrecision <- M[p, p]
+                } else {
+                    warning("ignore.parm.uncertainty ==> No joint precision available")
+                }
+            }
+        } else {
+            warning("Could not report sd's of full randomeffect vector.")
+        }
+    }
+
     ans <- list(
         value = native$value,
         sd = native$sd,
@@ -923,6 +981,13 @@ sdreport_native <- function(obj, par.fixed = NULL, hessian.fixed = NULL, getJoin
         pdHess = pdHess,
         gradient.fixed = gradient.fixed
     )
+    if (!is.null(r) && exists("par.random")) {
+        ans$par.random <- par.random
+        ans$diag.cov.random <- diag.cov.random
+    }
+    if (exists("jointPrecision")) {
+        ans$jointPrecision <- jointPrecision
+    }
     ans$env <- new.env(parent = emptyenv())
     ans$env$parameters <- obj$env$parameters
     ans$env$random <- obj$env$random
