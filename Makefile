@@ -132,7 +132,7 @@ test-tmb_examples:
 
 test-sdreport-native:
 	$(R) --version
-	examples=linreg,linreg_parallel,longlinreg Rscript tmb_examples/tools/check_sdreport_native.R
+	examples=linreg,linreg_parallel,longlinreg fallback_example=transform Rscript tmb_examples/tools/check_sdreport_native.R
 
 doxygen:
 	cd dox; make all

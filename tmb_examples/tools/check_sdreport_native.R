@@ -34,6 +34,7 @@ if (length(examples) == 0) {
     stop("No examples specified.")
 }
 cat("Running sdreport_native regression for examples:", paste(examples, collapse = ", "), "\n")
+fallback_example <- Sys.getenv("fallback_example", unset = "transform")
 
 # Build/load the local native kernel when not provided by installed TMB.
 if (!is.loaded("tmb_sdreport_delta_fixed")) {
@@ -78,6 +79,43 @@ for (i in seq_along(examples)) {
         entry$error <<- conditionMessage(e)
     })
     results[[i]] <- entry
+}
+
+if (nzchar(fallback_example)) {
+    ex <- fallback_example
+    key <- paste0("fallback:", ex)
+    cat("\n--- Fallback Example:", ex, "---\n")
+    entry <- list(pass = FALSE, error = NULL, cmp = NULL)
+    tryCatch({
+        expr <- sprintf(
+            paste(
+                "library(TMB)",
+                "runExample('%s', thisR=TRUE, exfolder='%s')",
+                "ok <- FALSE",
+                "tryCatch({ TMB::sdreport_native(obj, strict=TRUE); stop('strict=TRUE unexpectedly succeeded') }, error=function(e) { ok <<- TRUE })",
+                "if (!ok) stop('strict fallback check failed')",
+                "ref <- TMB::sdreport(obj)",
+                "nat <- TMB::sdreport_native(obj, strict=FALSE)",
+                "m <- function(x,y){ d <- abs(as.numeric(x)-as.numeric(y)); if(length(d)==0 || all(is.na(d))) return(NA_real_); max(d, na.rm=TRUE) }",
+                "dv <- m(ref$value, nat$value)",
+                "ds <- m(ref$sd, nat$sd)",
+                "if (!is.na(dv) && dv > 1e-7) stop(sprintf('fallback value mismatch: %%g', dv))",
+                "if (!is.na(ds) && ds > 1e-7) stop(sprintf('fallback sd mismatch: %%g', ds))",
+                "cat('Fallback check passed for %s\\n')",
+                sep = "; "
+            ),
+            ex, file.path(repo_root, "tmb_examples"), ex
+        )
+        status <- system2("Rscript", c("-e", shQuote(expr)), stdout = "", stderr = "")
+        entry$pass <- identical(status, 0L)
+        if (!entry$pass) {
+            entry$error <- sprintf("subprocess exited with status %d", status)
+        }
+    }, error = function(e) {
+        entry$pass <<- FALSE
+        entry$error <<- conditionMessage(e)
+    })
+    results[[key]] <- entry
 }
 
 cat("\nSummary:\n")
