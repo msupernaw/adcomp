@@ -873,91 +873,154 @@ struct ADFun {
     return ans;
   }
   struct compress_helper {
-// Exact built-in singleton identity, never an operator-name trust decision.
-struct Lift {
-  struct Node {std::string op;size_t out,a,b;double constant;};
-  bool supported=true; std::string reason;
-  ADFun* source;size_t shared,width;std::vector<Node> nodes;
-  Lift(ADFun& f,size_t n,size_t b):source(&f),shared(n),width(b){
-    std::map<TMBad::global::OperatorPure*,std::pair<std::string,unsigned> > known;
-    known[f.glob.template getOperator<TMBad::global::InvOp>()]={"InvOp",3};
-    known[f.glob.template getOperator<TMBad::global::ConstOp>()]={"ConstOp",3};
-    known[f.glob.template getOperator<TMBad::global::DepOp>()]={"DepOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::CopyOp>()]={"CopyOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::AddOp>()]={"AddOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::SubOp>()]={"SubOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::MulOp>()]={"MulOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::DivOp>()]={"DivOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::NegOp>()]={"NegOp",3};
-    known[f.glob.template getOperator<TMBad::ExpOp>()]={"ExpOp",3};
-    known[f.glob.template getOperator<TMBad::LogOp>()]={"LogOp",3};
-    known[f.glob.template getOperator<TMBad::SinOp>()]={"SinOp",3};
-    known[f.glob.template getOperator<TMBad::CosOp>()]={"CosOp",3};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::AddOp_<false,true> >()]={"AddOp",2};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::AddOp_<true,false> >()]={"AddOp",1};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::AddOp_<false,false> >()]={"AddOp",0};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::SubOp_<false,true> >()]={"SubOp",2};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::SubOp_<true,false> >()]={"SubOp",1};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::SubOp_<false,false> >()]={"SubOp",0};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::MulOp_<false,true> >()]={"MulOp",2};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::MulOp_<true,false> >()]={"MulOp",1};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::MulOp_<false,false> >()]={"MulOp",0};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::DivOp_<false,true> >()]={"DivOp",2};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::DivOp_<true,false> >()]={"DivOp",1};
-    known[f.glob.template getOperator<TMBad::global::ad_plain::DivOp_<false,false> >()]={"DivOp",0};
-    std::vector<bool> active(f.glob.values.size(),false);
-    TMBad::IndexPair ptr(0,0);
-    for(auto op:f.glob.opstack){
-      auto match=known.find(op);
-      if(match==known.end() || op->output_size()!=1 ||
-         op->info().test(TMBad::op_info::forward_updating) ||
-         op->info().test(TMBad::op_info::reverse_updating) || op->info().test(TMBad::op_info::dynamic)) {
-        supported=false;reason=op->op_name();nodes.clear();return;
+    /** \brief Replay a scalar tape with shared inputs and batched seed inputs
+        \details Unsupported operators are detected before recording.
+        Suppressed derivatives require input-independent operands.
+    */
+    struct batch_transform {
+      struct instruction {
+        std::string op;
+        size_t out, a, b;
+        double constant;
+      };
+      bool supported;
+      std::string reason;
+      ADFun *source;
+      size_t shared, width;
+      std::vector<instruction> instructions;
+      // Bits identify the operands whose derivatives the operator propagates.
+      enum { left_active = 1, right_active = 2, both_active = 3 };
+      typedef std::pair<std::string, unsigned> operator_info;
+      typedef std::map<global::OperatorPure *, operator_info> operator_table;
+      template <class Operator>
+      void add_operator(operator_table &table, const char *name,
+                        unsigned flags = both_active) {
+        table[source->glob.template getOperator<Operator>()] =
+            operator_info(name, flags);
       }
-      const std::string& name=match->second.first;
-      size_t a=op->input_size()>0?f.glob.inputs[ptr.first]:0;
-      size_t b=op->input_size()>1?f.glob.inputs[ptr.first+1]:0;
-      unsigned flags=match->second.second;
-      if(op->input_size()==2 && ((!(flags&1) && active[a]) || (!(flags&2) && active[b]))) {
-        supported=false;reason="suppressed active derivative";nodes.clear();return;
+      batch_transform(ADFun &f, size_t n, size_t b)
+          : supported(true), source(&f), shared(n), width(b) {
+        operator_table known;
+        // Match operator instances, not the names returned by op_name().
+        add_operator<global::InvOp>(known, "InvOp");
+        add_operator<global::ConstOp>(known, "ConstOp");
+        add_operator<global::DepOp>(known, "DepOp");
+        add_operator<ad_plain::CopyOp>(known, "CopyOp");
+        add_operator<ad_plain::AddOp>(known, "AddOp");
+        add_operator<ad_plain::SubOp>(known, "SubOp");
+        add_operator<ad_plain::MulOp>(known, "MulOp");
+        add_operator<ad_plain::DivOp>(known, "DivOp");
+        add_operator<ad_plain::NegOp>(known, "NegOp");
+        add_operator<ExpOp>(known, "ExpOp");
+        add_operator<LogOp>(known, "LogOp");
+        add_operator<SinOp>(known, "SinOp");
+        add_operator<CosOp>(known, "CosOp");
+        add_operator<ad_plain::AddOp_<false, true> >(known, "AddOp",
+                                                     right_active);
+        add_operator<ad_plain::AddOp_<true, false> >(known, "AddOp",
+                                                     left_active);
+        add_operator<ad_plain::AddOp_<false, false> >(known, "AddOp", 0);
+        add_operator<ad_plain::SubOp_<false, true> >(known, "SubOp",
+                                                     right_active);
+        add_operator<ad_plain::SubOp_<true, false> >(known, "SubOp",
+                                                     left_active);
+        add_operator<ad_plain::SubOp_<false, false> >(known, "SubOp", 0);
+        add_operator<ad_plain::MulOp_<false, true> >(known, "MulOp",
+                                                     right_active);
+        add_operator<ad_plain::MulOp_<true, false> >(known, "MulOp",
+                                                     left_active);
+        add_operator<ad_plain::MulOp_<false, false> >(known, "MulOp", 0);
+        add_operator<ad_plain::DivOp_<false, true> >(known, "DivOp",
+                                                     right_active);
+        add_operator<ad_plain::DivOp_<true, false> >(known, "DivOp",
+                                                     left_active);
+        add_operator<ad_plain::DivOp_<false, false> >(known, "DivOp", 0);
+        std::vector<bool> active(f.glob.values.size(), false);
+        IndexPair ptr(0, 0);
+        for (auto op : f.glob.opstack) {
+          auto match = known.find(op);
+          if (match == known.end() || op->output_size() != 1 ||
+              op->info().test(op_info::forward_updating) ||
+              op->info().test(op_info::reverse_updating) ||
+              op->info().test(op_info::dynamic)) {
+            supported = false;
+            reason = op->op_name();
+            instructions.clear();
+            return;
+          }
+          const std::string &name = match->second.first;
+          size_t a = op->input_size() > 0 ? f.glob.inputs[ptr.first] : 0;
+          size_t b = op->input_size() > 1 ? f.glob.inputs[ptr.first + 1] : 0;
+          unsigned flags = match->second.second;
+          if (op->input_size() == 2 &&
+              ((!(flags & left_active) && active[a]) ||
+               (!(flags & right_active) && active[b]))) {
+            supported = false;
+            reason = "suppressed active derivative";
+            instructions.clear();
+            return;
+          }
+          active[ptr.second] = (name == "InvOp") ||
+                               (op->input_size() > 0 && active[a]) ||
+                               (op->input_size() > 1 && active[b]);
+          instructions.push_back(
+              {name, size_t(ptr.second), a, b, f.glob.values[ptr.second]});
+          op->increment(ptr);
+        }
       }
-      active[ptr.second]=(name=="InvOp") || (op->input_size()>0 && active[a]) || (op->input_size()>1 && active[b]);
-      nodes.push_back({name,size_t(ptr.second),a,b,f.glob.values[ptr.second]});
-      op->increment(ptr);
-    }
-  }
-  std::vector<ad_aug> operator()(std::vector<ad_aug> z){
-    if(!supported) throw std::logic_error("Unsupported lift must use original compressor");
-    std::vector<ad_segment> v(source->glob.values.size());
-    for(size_t i=0;i<source->Domain();++i){
-      if(i<shared)v[source->glob.inv_index[i]]=ad_segment(z[i]);
-      else v[source->glob.inv_index[i]]=ad_segment(&z[shared+(i-shared)*width],width);
-    }
-    for(const auto& node:nodes){
-      auto& out=v[node.out];auto a=v[node.a],b=v[node.b];const auto& op=node.op;
-      if(op=="InvOp")continue;
-      else if(op=="ConstOp")out=ad_segment(node.constant);
-      else if(op=="DepOp"||op=="CopyOp")out=a;
-      else if(op=="AddOp")out=a+b;
-      else if(op=="SubOp")out=a-b;
-      else if(op=="MulOp")out=a*b;
-      else if(op=="DivOp")out=a/b;
-      else if(op=="NegOp")out=-a;
-      else if(op=="ExpOp")out=exp(a);
-      else if(op=="LogOp")out=log(a);
-      else if(op=="SinOp")out=sin(a);
-      else if(op=="CosOp")out=cos(a);
-    }
-    std::vector<ad_aug> out(source->Range()*width);
-    for(size_t i=0;i<source->Range();++i)for(size_t lane=0;lane<width;++lane){
-      ad_segment r=v[source->glob.dep_index[i]];out[i*width+lane]=r[r.size()==1?0:lane];
-    }
-    return out;
-  }
-};
+      std::vector<ad_aug> operator()(std::vector<ad_aug> z) {
+        if (!supported)
+          throw std::logic_error(
+              "Cannot replay an unsupported batch transform");
+        std::vector<ad_segment> v(source->glob.values.size());
+        for (size_t i = 0; i < source->Domain(); ++i) {
+          if (i < shared)
+            v[source->glob.inv_index[i]] = ad_segment(z[i]);
+          else
+            v[source->glob.inv_index[i]] =
+                ad_segment(&z[shared + (i - shared) * width], width);
+        }
+        for (const auto &node : instructions) {
+          auto &out = v[node.out];
+          auto a = v[node.a], b = v[node.b];
+          const auto &op = node.op;
+          if (op == "InvOp")
+            continue;
+          else if (op == "ConstOp")
+            out = ad_segment(node.constant);
+          else if (op == "DepOp" || op == "CopyOp")
+            out = a;
+          else if (op == "AddOp")
+            out = a + b;
+          else if (op == "SubOp")
+            out = a - b;
+          else if (op == "MulOp")
+            out = a * b;
+          else if (op == "DivOp")
+            out = a / b;
+          else if (op == "NegOp")
+            out = -a;
+          else if (op == "ExpOp")
+            out = exp(a);
+          else if (op == "LogOp")
+            out = log(a);
+          else if (op == "SinOp")
+            out = sin(a);
+          else if (op == "CosOp")
+            out = cos(a);
+        }
+        std::vector<ad_aug> out(source->Range() * width);
+        for (size_t i = 0; i < source->Range(); ++i)
+          for (size_t lane = 0; lane < width; ++lane) {
+            ad_segment r = v[source->glob.dep_index[i]];
+            out[i * width + lane] = r[r.size() == 1 ? 0 : lane];
+          }
+        return out;
+      }
+    };
 
     size_t requested_width;
-    size_t batch_width=0, shared=0, batch_first=0, batch_end=0;
+    size_t batch_width, shared, batch_first, batch_end;
     std::vector<Index> active_inputs;
     std::vector<Replay> batch_output;
 
@@ -972,8 +1035,16 @@ struct Lift {
     std::vector<Replay> vec;
     std::vector<Index> deriv_idx;
     compress_helper(ADFun *adf, std::vector<bool> &keep_x,
-                    std::vector<bool> &keep_y, int width=0)
-        : requested_width(width), adf(adf), keep_x(keep_x), keep_y(keep_y), K(0) {}
+                    std::vector<bool> &keep_y, int width = 0)
+        : requested_width(width),
+          batch_width(0),
+          shared(0),
+          batch_first(0),
+          batch_end(0),
+          adf(adf),
+          keep_x(keep_x),
+          keep_y(keep_y),
+          K(0) {}
     void initialize(global::replay &replay) {
       if (K == 0) {
         replay.clear_deriv_sub();
@@ -997,7 +1068,8 @@ struct Lift {
                     std::vector<Index> &col_idx) {
       bool first_instance = (k == K);
       if (k == K) {
-        batch_width=0; batch_output.clear();
+        batch_width = 0;
+        batch_output.clear();
         K = findNextIndex(k, col_idx);
         if (!keep_y[k]) return;
 
@@ -1032,45 +1104,53 @@ struct Lift {
         if (requested) {
           active_inputs = which<Index>(keep_x_sub);
           shared = 0;
-          while(shared < active_inputs.size() && active_inputs[shared] < adf->Domain()) ++shared;
-          // Preflight exact operator identities before nested recording.
-          Lift transform(jac_row, shared, requested);
-          if(transform.supported) {
-          std::vector<double> input(shared + (active_inputs.size()-shared)*requested, 0.);
-          auto original = jac_row.DomainVec();
-          for(size_t i=0;i<shared;++i) input[i]=original[i];
-          ADFun lanes(transform, input);
-          std::vector<Index> seeds(input.size()-shared);
-          for(size_t i=0;i<seeds.size();++i) seeds[i]=shared+i;
-          lanes.reorder(seeds);
-          lanes.set_inv_positions();
-          atomic_jac_row = lanes.atomic_raw();
-          batch_width=requested;
-          batch_end=k;
+          while (shared < active_inputs.size() &&
+                 active_inputs[shared] < adf->Domain())
+            ++shared;
+          // Keep unsupported groups on the original compressed path.
+          batch_transform transform(jac_row, shared, requested);
+          if (transform.supported) {
+            std::vector<double> input(
+                shared + (active_inputs.size() - shared) * requested, 0.);
+            auto original = jac_row.DomainVec();
+            for (size_t i = 0; i < shared; ++i) input[i] = original[i];
+            ADFun lanes(transform, input);
+            std::vector<Index> seeds(input.size() - shared);
+            for (size_t i = 0; i < seeds.size(); ++i) seeds[i] = shared + i;
+            lanes.reorder(seeds);
+            lanes.set_inv_positions();
+            atomic_jac_row = lanes.atomic_raw();
+            batch_width = requested;
+            batch_end = k;
           } else {
-            atomic_jac_row=jac_row.atomic_raw();
+            atomic_jac_row = jac_row.atomic_raw();
           }
         } else {
           atomic_jac_row = jac_row.atomic_raw();
         }
       }
       if (batch_width) {
-        if(k >= batch_end) {
-          batch_first=k;
-          batch_end=std::min(size_t(K),k+batch_width);
-          std::vector<Replay> input(shared+(active_inputs.size()-shared)*batch_width,Replay(0));
-          for(size_t i=0;i<shared;++i) input[i]=vec[active_inputs[i]];
-          for(size_t i=shared;i<active_inputs.size();++i) {
-            size_t row=active_inputs[i]-adf->Domain();
-            if(row>=batch_first && row<batch_end)
-              input[shared+(i-shared)*batch_width+row-batch_first]=1.;
+        if (k >= batch_end) {
+          batch_first = k;
+          batch_end = std::min(size_t(K), k + batch_width);
+          std::vector<Replay> input(
+              shared + (active_inputs.size() - shared) * batch_width,
+              Replay(0));
+          for (size_t i = 0; i < shared; ++i) input[i] = vec[active_inputs[i]];
+          for (size_t i = shared; i < active_inputs.size(); ++i) {
+            size_t row = active_inputs[i] - adf->Domain();
+            if (row >= batch_first && row < batch_end)
+              input[shared + (i - shared) * batch_width + row - batch_first] =
+                  1.;
           }
-          atomic_jac_row.Op.ctrl.clear_all=true;
-          atomic_jac_row.Op.ctrl.deriv_all=true;
-          batch_output=atomic_jac_row(input);
+          // Each batch accumulates its shared-input adjoints independently.
+          atomic_jac_row.Op.ctrl.clear_all = true;
+          atomic_jac_row.Op.ctrl.deriv_all = true;
+          batch_output = atomic_jac_row(input);
         }
-        for(size_t i=0;i<deriv_idx.size();++i)
-          replay.deriv_inv(deriv_idx[i])=batch_output[i*batch_width+k-batch_first];
+        for (size_t i = 0; i < deriv_idx.size(); ++i)
+          replay.deriv_inv(deriv_idx[i]) =
+              batch_output[i * batch_width + k - batch_first];
         return;
       }
       bool last_instance = (k == K - 1);
